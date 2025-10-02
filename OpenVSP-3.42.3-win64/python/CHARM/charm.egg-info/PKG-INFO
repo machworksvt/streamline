@@ -1,4 +1,4 @@
-Metadata-Version: 2.2
+Metadata-Version: 2.4
 Name: charm
 Version: 1.0.0
 Summary: Python package to automate working with CHARM
@@ -20,5 +20,6 @@ Requires-Dist: Pillow
 Dynamic: author
 Dynamic: author-email
 Dynamic: license
+Dynamic: license-file
 Dynamic: requires-dist
 Dynamic: summary
