@@ -37,3 +37,10 @@ To activate the enviroment you just created (allowing your python scripts to act
 ```powershell
 conda activate streamline
 ```
+
+### I need to add a new python package
+Add your python package to `requirements.txt` and run the setup again:
+```powershell
+.\setup_streamline.ps1 -Force
+```
+Make sure to alert your team members so that they also re-run the setup script after pulling in your changes.
