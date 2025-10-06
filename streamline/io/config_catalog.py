@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from ..core.errors import ConfigCatalogError
+from ..core.logging import get_logger
 from ..core.schema import Configuration, ProjectDefinition
 from .fs import load_config, load_project_def
 
@@ -19,11 +21,8 @@ class ConfigSummary:
     notes: str
 
 
-class ConfigCatalogError(RuntimeError):
-    pass
-
-
 def load_config_catalog(project_root: Path) -> List[ConfigSummary]:
+    logger = get_logger(__name__, project=str(project_root))
     project = load_project_def(project_root)
     configs: List[ConfigSummary] = []
     seen_ids: Dict[str, Path] = {}
@@ -32,12 +31,24 @@ def load_config_catalog(project_root: Path) -> List[ConfigSummary]:
         try:
             cfg = load_config(cfg_path)
         except Exception as exc:
-            raise ConfigCatalogError(f"Failed to load configuration '{rel_path}': {exc}") from exc
+            err = ConfigCatalogError(
+                f"Failed to load configuration '{rel_path}': {exc}",
+                context={"config_path": str(cfg_path)},
+            )
+            logger.error(err.message, context=err.context, code=err.code)
+            raise err from exc
         if cfg.config_id in seen_ids:
             other = seen_ids[cfg.config_id]
-            raise ConfigCatalogError(
-                f"Duplicate configuration id '{cfg.config_id}' in catalog: {rel_path} and {other}"
+            err = ConfigCatalogError(
+                f"Duplicate configuration id '{cfg.config_id}' in catalog",
+                context={
+                    "config_id": cfg.config_id,
+                    "path": str(cfg_path),
+                    "other_path": str(other),
+                },
             )
+            logger.error(err.message, context=err.context, code=err.code)
+            raise err
         seen_ids[cfg.config_id] = cfg_path
         configs.append(
             ConfigSummary(
@@ -57,6 +68,12 @@ def get_configuration(project_root: Path, config_id: str) -> Configuration:
     for summary in load_config_catalog(project_root):
         if summary.config_id == config_id:
             return load_config(summary.path)
-    raise ConfigCatalogError(f"Configuration '{config_id}' not found in catalog")
+    err = ConfigCatalogError(
+        f"Configuration '{config_id}' not found in catalog",
+        context={"config_id": config_id, "project": str(project_root)},
+        hint="Verify that the configuration exists in the project references.",
+    )
+    get_logger(__name__).error(err.message, context=err.context, code=err.code, hint=err.hint)
+    raise err
 
 

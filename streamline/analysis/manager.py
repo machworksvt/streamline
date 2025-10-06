@@ -11,6 +11,9 @@ from pathlib import Path
 from queue import Empty, Queue
 from typing import Any, Callable, Dict, Iterable, Optional, Set
 
+from ..core.errors import AnalysisError
+from ..core.logging import get_logger
+from ..core.schema import RunManifest
 from ..io.results_index import (
     ResultIndexEntry,
     append_result_entry,
@@ -31,7 +34,6 @@ from ..vsp.contracts.stability import (
 )
 from ..vsp.run_utils import dump_json, prepare_results_dir, relativize
 from ..vsp.session import init_context
-from ..core.schema import RunManifest
 
 MaterializerFunc = Callable[["AnalysisManager", "AnalysisJob", str, Any, datetime, datetime], Receipt]
 
@@ -137,6 +139,12 @@ class AnalysisManager:
         if vsp is None and not auto_init_vsp:
             raise ValueError("Provide a VSP context or enable auto_init_vsp.")
 
+        self._logger = get_logger(__name__).bind(manager_id=uuid.uuid4().hex[:8])
+        self._logger.debug(
+            "Initializing AnalysisManager",
+            context={"auto_init_vsp": auto_init_vsp, "open_gui": open_gui},
+        )
+
         self._vsp_lock = vsp_lock or threading.RLock()
         self._lock = threading.RLock()
         self._registry: Dict[str, AnalysisRegistration] = {}
@@ -150,8 +158,13 @@ class AnalysisManager:
             ctx = init_context(open_gui=open_gui)
             self._vsp = ctx.vsp
             self._vsp_versions = dict(ctx.versions)
+            self._logger.info(
+                "Bound new OpenVSP session",
+                context={"versions": self._vsp_versions},
+            )
         else:
             self._vsp = vsp
+            self._logger.info("Attached provided OpenVSP session")
 
         self._results_root: Optional[Path] = None
         if results_root is not None:
@@ -182,6 +195,10 @@ class AnalysisManager:
         with self._lock:
             self._results_root = Path(root).resolve() if root is not None else None
             self._prune_stale_cache_entries()
+        self._logger.info(
+            "Configured results root",
+            context={"results_root": str(self._results_root) if self._results_root else None},
+        )
 
     # ------------------------------------------------------------------
     # Registration
@@ -210,6 +227,14 @@ class AnalysisManager:
                 description=description,
                 uses_vsp_lock=bool(uses_vsp_lock),
             )
+        self._logger.debug(
+            "Registered analysis",
+            context={
+                "analysis": key,
+                "uses_vsp_lock": uses_vsp_lock,
+                "has_materializer": materializer is not None,
+            },
+        )
 
     def register_builtin_analyses(self) -> None:
         from ..vsp.analyses.compute_geometry import run_compute_geometry
@@ -271,6 +296,15 @@ class AnalysisManager:
             )
             self._jobs[job_id] = JobState(job=job)
             self._queue.put(job_id)
+            self._logger.info(
+                "Queued analysis job",
+                context={
+                    "job_id": job_id,
+                    "analysis": analysis_key,
+                    "priority": priority,
+                    "wait_for": list(job.wait_for),
+                },
+            )
             return job_id
 
     def has_pending(self) -> bool:
@@ -309,15 +343,22 @@ class AnalysisManager:
     # Cache & invalidation
     # ------------------------------------------------------------------
     def invalidate(self, keys: Iterable[str]) -> Set[str]:
+        key_list = [k for k in keys]
         with self._lock:
-            impacted = self._dependency_index.invalidate(keys)
+            impacted = self._dependency_index.invalidate(key_list)
             if not impacted:
+                self._logger.debug("No cache entries impacted by invalidation", context={"keys": key_list})
                 return set()
             for cache_bucket in self._cache.values():
                 for ticket_sha in list(impacted):
                     cache_bucket.pop(ticket_sha, None)
             self._prune_stale_cache_entries()
-            return impacted
+        impacted_set = set(impacted)
+        self._logger.info(
+            "Invalidated cached receipts",
+            context={"keys": key_list, "impacted": list(impacted_set)},
+        )
+        return impacted_set
 
     def cache_entry(self, analysis_key: str, ticket_sha: str) -> Optional[AnalysisCacheEntry]:
         with self._lock:
@@ -336,7 +377,15 @@ class AnalysisManager:
             if state is None:
                 raise KeyError("Unknown job '{0}'".format(job_id))
             job = state.job
+        self._logger.debug(
+            "Evaluating job for execution",
+            context={"job_id": job_id, "analysis": job.analysis_key},
+        )
         if not self._dependencies_satisfied(job):
+            self._logger.debug(
+                "Job waiting on dependencies",
+                context={"job_id": job_id, "wait_for": list(job.wait_for)},
+            )
             self._queue.put(job_id)
             return None
 
@@ -350,6 +399,10 @@ class AnalysisManager:
                 state.started_at = state.started_at or datetime.utcnow()
                 state.ended_at = datetime.utcnow()
                 state.error = None
+            self._logger.info(
+                "Reusing cached receipt",
+                context={"job_id": job_id, "analysis": job.analysis_key, "ticket_sha": ticket_sha},
+            )
             return cache_entry.receipt
 
         with self._lock:
@@ -357,6 +410,10 @@ class AnalysisManager:
             state.started_at = datetime.utcnow()
             state.error = None
             started_at = state.started_at
+        self._logger.info(
+            "Running analysis job",
+            context={"job_id": job_id, "analysis": job.analysis_key},
+        )
 
         registration = self._registry[job.analysis_key]
         call_kwargs = dict(registration.default_kwargs)
@@ -365,7 +422,12 @@ class AnalysisManager:
         try:
             if registration.uses_vsp_lock:
                 if self._vsp is None:
-                    raise RuntimeError("Analysis '{0}' requires an OpenVSP context".format(job.analysis_key))
+                    err = AnalysisError(
+                        "OpenVSP context is required for analysis",
+                        context={"analysis": job.analysis_key},
+                    )
+                    self._logger.error(err.message, context=err.context, code=err.code)
+                    raise err
                 with self.vsp_guard():
                     result = registration.runner(self._vsp, job.ticket, **call_kwargs)
             else:
@@ -376,6 +438,10 @@ class AnalysisManager:
                 state.status = "failed"
                 state.error = exc
                 state.ended_at = ended
+            self._logger.exception(
+                "Analysis job failed",
+                context={"job_id": job_id, "analysis": job.analysis_key},
+            )
             raise
 
         ended = datetime.utcnow()
@@ -407,6 +473,14 @@ class AnalysisManager:
             cache_bucket[ticket_sha] = entry
             self._dependency_index.record(ticket_sha, deps)
         self._prune_stale_cache_entries()
+        self._logger.info(
+            "Analysis job completed",
+            context={
+                "job_id": job_id,
+                "analysis": job.analysis_key,
+                "ticket_sha": ticket_sha,
+            },
+        )
         return receipt
 
     def _dependencies_satisfied(self, job: AnalysisJob) -> bool:
@@ -417,13 +491,25 @@ class AnalysisManager:
             for dep_id in job.wait_for:
                 dep_state = self._jobs.get(dep_id)
                 if dep_state is None:
-                    raise KeyError(f"Job '{job.job_id}' depends on unknown job '{dep_id}'")
+                    err = AnalysisError(
+                        "Job depends on unknown prerequisite",
+                        context={"job_id": job.job_id, "missing_dependency": dep_id},
+                    )
+                    self._logger.error(err.message, context=err.context, code=err.code)
+                    raise err
                 if dep_state.status in {"pending", "running"}:
                     unresolved.add(dep_id)
                 if dep_state.status in {"failed", "cancelled"}:
-                    raise RuntimeError(
-                        f"Job '{job.job_id}' blocked by dependency '{dep_id}' in status {dep_state.status}"
+                    err = AnalysisError(
+                        "Blocking dependency is not complete",
+                        context={
+                            "job_id": job.job_id,
+                            "dependency": dep_id,
+                            "status": dep_state.status,
+                        },
                     )
+                    self._logger.error(err.message, context=err.context, code=err.code)
+                    raise err
         return not unresolved
 
     def _prune_stale_cache_entries(self) -> None:
