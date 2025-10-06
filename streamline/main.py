@@ -29,6 +29,7 @@ from .io.config_catalog import load_config_catalog
 from .io.fs import load_config, load_project_def, write_json
 from .io.op_catalog import get_operating_point, load_op_catalog
 from .io.results_index import load_result_entries
+from .tui import StreamlineApp
 from .vsp.contracts import ComputeGeometryTicket, ParasiteDragTicket, StabilityTicket
 from .vsp.configure import apply_configuration
 from .vsp.operating_point import apply_operating_point
@@ -592,6 +593,18 @@ def main(argv: Optional[list[str]] = None) -> int:
     p_smoke.add_argument("--mach", type=float, default=None, help="Override Mach number if desired")
     p_smoke.add_argument("--alpha-deg", type=float, default=None, help="Angle of attack override (deg)")
 
+    p_tui = sub.add_parser("tui", help="Launch the Textual interface")
+    p_tui.add_argument(
+        "--projects-root",
+        default=str(repo_root_from_here() / "projects"),
+        help="Root folder for projects/ (default: ./projects)",
+    )
+    p_tui.add_argument(
+        "--open-gui",
+        action="store_true",
+        help="Open OpenVSP GUI when the analysis manager is first created",
+    )
+
     args = parser.parse_args(argv)
 
     log_file = Path(args.log_file).expanduser().resolve() if args.log_file else None
@@ -740,6 +753,12 @@ def main(argv: Optional[list[str]] = None) -> int:
                 config_id=args.config_id,
                 op_id=args.op_id,
             )
+            return 0
+
+        if args.cmd == "tui":
+            projects_root = ensure_dir(Path(args.projects_root))
+            app = StreamlineApp(projects_root=projects_root, open_gui=args.open_gui)
+            app.run()
             return 0
 
         return 0

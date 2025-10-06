@@ -1,0 +1,38 @@
+#workspace {
+    height: 1fr;
+}
+
+#sidebar {
+    width: 32;
+    border: tall $secondary;
+    padding: 1 1;
+    background: $panel;
+}
+
+#main {
+    border: tall $surface;
+    padding: 1 2;
+    background: $background 10%;
+    gap: 1;
+}
+
+.section-title {
+    text-style: bold;
+    padding-bottom: 1;
+}
+
+ProjectList {
+    height: 1fr;
+    border: round $primary;
+}
+
+ProjectSummaryView {
+    border: round $surface;
+    min-height: 10;
+    padding: 1;
+}
+
+AnalysisQueueView {
+    height: 1fr;
+    border: round $surface;
+}
