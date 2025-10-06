@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from queue import Empty, Queue
-from typing import Any, Callable, Dict, Iterable, Optional, Set
+from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple
 
 from ..core.errors import AnalysisError
 from ..core.logging import get_logger
@@ -18,6 +18,7 @@ from ..io.results_index import (
     ResultIndexEntry,
     append_result_entry,
     load_result_entries,
+    remove_result_entries,
 )
 from ..vsp.contracts.base import Receipt, Ticket
 from ..vsp.contracts.compute_geometry import (
@@ -359,6 +360,111 @@ class AnalysisManager:
             context={"keys": key_list, "impacted": list(impacted_set)},
         )
         return impacted_set
+
+    def clear_cache(
+        self,
+        *,
+        analysis_keys: Optional[Iterable[str]] = None,
+        drop_results: bool = True,
+    ) -> None:
+        """Clear cached receipts and optionally remove their artifacts."""
+
+        keys_filter: Set[str] = {key for key in (analysis_keys or []) if key}
+        removed_entries: List[Tuple[str, str, AnalysisCacheEntry]] = []
+
+        with self._lock:
+            if not self._cache:
+                self._logger.debug(
+                    "Cache already empty",
+                    context={"analysis_keys": list(keys_filter) or None},
+                )
+                return
+            for analysis_key, bucket in list(self._cache.items()):
+                if keys_filter and analysis_key not in keys_filter:
+                    continue
+                for ticket_sha, entry in list(bucket.items()):
+                    removed_entries.append((analysis_key, ticket_sha, entry))
+                    bucket.pop(ticket_sha, None)
+                    self._dependency_index.clear(ticket_sha)
+                if not bucket:
+                    self._cache.pop(analysis_key, None)
+
+        if not removed_entries:
+            self._logger.debug(
+                "No cache entries matched clear request",
+                context={"analysis_keys": list(keys_filter) or None},
+            )
+            return
+
+        root = self._results_root
+        artifact_paths: Set[Path] = set()
+        if drop_results and root is not None:
+            root_resolved = root.resolve()
+            for _, _, entry in removed_entries:
+                artifact_dir = getattr(entry.receipt, "artifact_dir", None)
+                if not artifact_dir:
+                    continue
+                candidate = Path(artifact_dir)
+                if not candidate.is_absolute():
+                    candidate = root / candidate
+                try:
+                    candidate_resolved = candidate.resolve(strict=False)
+                except Exception:
+                    candidate_resolved = candidate
+                try:
+                    candidate_resolved.relative_to(root_resolved)
+                except ValueError:
+                    self._logger.warning(
+                        "Skipping artifact removal outside results root",
+                        context={"path": str(candidate_resolved)},
+                    )
+                    continue
+                artifact_paths.add(candidate_resolved)
+
+            for path in sorted(artifact_paths, key=lambda p: len(p.parts), reverse=True):
+                try:
+                    shutil.rmtree(path)
+                    self._logger.debug(
+                        "Removed cached artifact directory",
+                        context={"path": str(path)},
+                    )
+                except FileNotFoundError:
+                    continue
+                except OSError as exc:
+                    self._logger.warning(
+                        "Failed to remove cached artifact directory",
+                        context={"path": str(path)},
+                        hint=str(exc),
+                    )
+
+            for path in artifact_paths:
+                parent = path.parent
+                while parent != root_resolved and parent.is_dir():
+                    try:
+                        parent.rmdir()
+                    except OSError:
+                        break
+                    parent = parent.parent
+
+        ticket_shas = [ticket_sha for _, ticket_sha, _ in removed_entries]
+        if root is not None:
+            try:
+                remove_result_entries(root.parent, ticket_shas=ticket_shas)
+            except Exception as exc:  # pragma: no cover - defensive logging
+                self._logger.warning(
+                    "Failed to update results index while clearing cache",
+                    context={"ticket_shas": ticket_shas},
+                    hint=str(exc),
+                )
+
+        self._logger.info(
+            "Cleared cached analysis receipts",
+            context={
+                "analysis_keys": list(keys_filter) or None,
+                "entries_removed": len(removed_entries),
+                "artifacts_removed": len(artifact_paths) if drop_results and root is not None else 0,
+            },
+        )
 
     def cache_entry(self, analysis_key: str, ticket_sha: str) -> Optional[AnalysisCacheEntry]:
         with self._lock:
