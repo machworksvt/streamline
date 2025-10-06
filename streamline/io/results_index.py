@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 from ..core.logging import get_logger
 from ..core.schema import RunManifest
@@ -89,3 +89,20 @@ def load_result_entries(project_root: Path) -> List[ResultIndexEntry]:
             )
         )
     return entries
+
+
+def remove_result_entries(project_root: Path, *, ticket_shas: Iterable[str]) -> None:
+    """Remove any index entries whose ticket SHA matches ``ticket_shas``."""
+
+    sha_set = {sha for sha in ticket_shas if sha}
+    if not sha_set:
+        return
+
+    data = load_results_index(project_root)
+    entries: List[Dict[str, Any]] = data.get("entries", []) or []
+    filtered = [raw for raw in entries if raw.get("ticket_sha256") not in sha_set]
+    if len(filtered) == len(entries):
+        return
+
+    data["entries"] = filtered
+    save_results_index(project_root, data)
