@@ -7,6 +7,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
 
+from .analysis import AnalysisManager
+from .core import (
+    ConfigCatalogError,
+    LoggingConfig,
+    OperatingPointCatalogError,
+    StreamlineError,
+    get_logger,
+    setup_logging,
+)
 from .core.schema import (
     Configuration,
     MissionDefinition,
@@ -16,11 +25,10 @@ from .core.schema import (
     ProjectDefinition,
     UAVDefinition,
 )
-from .io.config_catalog import load_config_catalog, ConfigCatalogError
-from .io.op_catalog import load_op_catalog, get_operating_point, OperatingPointCatalogError
+from .io.config_catalog import load_config_catalog
 from .io.fs import load_config, load_project_def, write_json
+from .io.op_catalog import get_operating_point, load_op_catalog
 from .io.results_index import load_result_entries
-from .analysis import AnalysisManager
 from .vsp.contracts import ComputeGeometryTicket, ParasiteDragTicket, StabilityTicket
 from .vsp.configure import apply_configuration
 from .vsp.operating_point import apply_operating_point
@@ -28,7 +36,15 @@ from .vsp.session import lock_gui, unlock_gui
 from .vsp.sets import list_sets, set_membership_counts, choose_populated_set
 
 
-# TODO: Create unified logging and error handling strategy (for TUI use later on)
+logger = get_logger(__name__)
+
+
+def _log_streamline_error(exc: StreamlineError) -> None:
+    logger.error(exc.message, context=exc.context, code=exc.code, hint=exc.hint)
+
+
+def _log_unhandled_error(exc: Exception, *, context: Optional[Dict[str, str]] = None) -> None:
+    logger.exception("Unhandled exception", context=context or {})
 # TODO: Add unit tests for CLI commands (using pytest + subprocess)
 # TODO: Add end-to-end tests for smoke_run (using pytest + subprocess), and make it headless-friendly by auto-generating the model
 # TODO: Validate parasite drag settings cuz the CD0 value is way too low right now
@@ -159,12 +175,17 @@ def create_new_project(projects_root: Path, project_id: str) -> Path:
     write_json(json.loads(default_powerplant_json(project_id).model_dump_json()), proj / f"powerplants/{project_id}_pp.json")
     write_json(json.loads(default_op_json().model_dump_json()), proj / "ops/cruise.json")
     write_json(json.loads(default_config_json().model_dump_json()), proj / "configs/clean.json")
+    logger.info(
+        "Project scaffolding created",
+        context={"project_id": project_id, "path": str(proj)},
+    )
     return proj
 
 
 def create_empty_vsp3(vsp, vsp_path: Path) -> None:
     vsp.ClearVSPModel()
     vsp.WriteVSPFile(str(vsp_path))
+    logger.info("Created empty VSP model", context={"path": str(vsp_path)})
 
 
 # -------------------------
@@ -183,11 +204,15 @@ def smoke_run(
     proj = ensure_dir(projects_root / project_id)
     results_root = ensure_dir(proj / "results")
     vsp_path = proj / f"{project_id}.vsp3"
+    run_logger = logger.bind(command="smoke", project_id=project_id)
 
     manager = AnalysisManager(results_root=results_root, open_gui=True)
     vsp = manager.vsp
     if vsp is None:
-        raise RuntimeError("AnalysisManager did not return an OpenVSP context")
+        raise StreamlineError(
+            "AnalysisManager did not return an OpenVSP context",
+            context={"project_id": project_id},
+        )
     
     with manager.vsp_guard():
         if not vsp_path.exists():
@@ -198,26 +223,37 @@ def smoke_run(
             except Exception:
                 pass
 
-    print("\n[INFO] The OpenVSP GUI should be open now.")
-    print("       Create a simple fuselage and wing (or load geometry).")
-    print(f"       Save to: {vsp_path}")
+    run_logger.info(
+        "OpenVSP GUI ready",
+        context={"vsp_path": str(vsp_path)},
+    )
+    run_logger.info("Create or load geometry, then save before continuing.")
     input("       Press ENTER here when you're ready to run VSPAERO... ")
 
     with manager.vsp_guard():
         try:
             vsp.WriteVSPFile(str(vsp_path))
         except Exception as exc:
-            print(f"[WARN] Could not save model before analysis: {exc}")
+            run_logger.warning(
+                "Could not save model before analysis",
+                hint=str(exc),
+            )
 
     config_catalog = load_config_catalog(proj)
     if not config_catalog:
-        raise ValueError("No configurations found for smoke run.")
+        raise ConfigCatalogError(
+            "No configurations found for smoke run",
+            context={"project_id": project_id},
+        )
 
     if config_id:
         config_summary = next((item for item in config_catalog if item.config_id == config_id), None)
         if config_summary is None:
             available = ", ".join(item.config_id for item in config_catalog)
-            raise ValueError(f"Configuration '{config_id}' not found. Available: {available}")
+            raise ConfigCatalogError(
+                f"Configuration '{config_id}' not found",
+                context={"requested": config_id, "available": available},
+            )
     else:
         config_summary = config_catalog[0]
         config_id = config_summary.config_id
@@ -226,12 +262,18 @@ def smoke_run(
 
     op_catalog = load_op_catalog(proj)
     if not op_catalog:
-        raise ValueError("No operating points found for smoke run.")
+        raise OperatingPointCatalogError(
+            "No operating points found for smoke run",
+            context={"project_id": project_id},
+        )
     if op_id:
         op_summary = next((item for item in op_catalog if item.op_id == op_id), None)
         if op_summary is None:
             available_ops = ", ".join(item.op_id for item in op_catalog)
-            raise ValueError(f"Operating point '{op_id}' not found. Available: {available_ops}")
+            raise OperatingPointCatalogError(
+                f"Operating point '{op_id}' not found",
+                context={"requested": op_id, "available": available_ops},
+            )
     else:
         op_summary = op_catalog[0]
         op_id = op_summary.op_id
@@ -242,15 +284,21 @@ def smoke_run(
     with manager.vsp_guard():
         all_sets = list_sets(vsp)
         counts = set_membership_counts(vsp)
-    print("[INFO] Sets present:")
     for idx, name in all_sets.items():
-        print(f"   - idx={idx:2d} name='{name}' members={counts.get(idx, 0)}")
+        run_logger.info(
+            "Set membership",
+            context={"index": idx, "name": name, "members": counts.get(idx, 0)},
+        )
 
     try:
         with manager.vsp_guard():
             applied_cfg = apply_configuration(vsp, config, fallback_set_name=set_name)
     except ValueError as exc:
-        raise RuntimeError(f"Failed to apply configuration '{config.config_id}': {exc}") from exc
+        raise StreamlineError(
+            f"Failed to apply configuration '{config.config_id}'",
+            context={"set_name": set_name},
+            hint=str(exc),
+        ) from exc
 
     resolved_set_idx = applied_cfg.geom_set_index
     if resolved_set_idx is None:
@@ -261,9 +309,13 @@ def smoke_run(
     alpha_value = float(alpha_deg) if alpha_deg is not None else 2.0
     mach_value = float(mach) if mach is not None else None
 
-    print(
-        f"[INFO] Operating point '{applied_op.op_id}' altitude={applied_op.altitude_m} m, "
-        f"Mach={applied_op.mach or 'n/a'}"
+    run_logger.info(
+        "Operating point selected",
+        context={
+            "op_id": applied_op.op_id,
+            "altitude_m": applied_op.altitude_m,
+            "mach": applied_op.mach,
+        },
     )
 
     base_context = {
@@ -418,31 +470,56 @@ def smoke_run(
     }
     for label, state in job_states.items():
         if state.error is not None:
-            raise RuntimeError(f"{label} analysis failed: {state.error}") from state.error
+            raise StreamlineError(
+                f"{label} analysis failed",
+                context={"project_id": project_id, "job_id": state.job.job_id},
+                hint=str(state.error),
+            ) from state.error
 
     stab_receipt = job_states["stability"].receipt
     parasite_receipt = job_states["parasite"].receipt
 
     if stab_receipt is None or parasite_receipt is None:
-        raise RuntimeError("Expected analysis receipts were not produced")
+        raise StreamlineError(
+            "Expected analysis receipts were not produced",
+            context={"project_id": project_id},
+        )
 
     if stab_receipt.artifact_dir:
-        print(f"[OK] Stability results stored under {results_root / stab_receipt.artifact_dir}")
+        run_logger.info(
+            "Stability results stored",
+            context={"path": str(results_root / stab_receipt.artifact_dir)},
+        )
     else:
-        print("[WARN] Stability receipt did not report an artifact directory.")
+        run_logger.warning("Stability receipt did not report an artifact directory")
     if stab_receipt.static_margin is not None:
-        print(f"       Static margin: {stab_receipt.static_margin:.3f}")
+        run_logger.info(
+            "Static margin computed",
+            context={"static_margin": stab_receipt.static_margin},
+        )
 
     if parasite_receipt.total_cd is not None:
-        print(f"[INFO] Parasite drag total CD: {parasite_receipt.total_cd:.5f}")
+        run_logger.info(
+            "Parasite drag computed",
+            context={"total_cd": parasite_receipt.total_cd},
+        )
     if parasite_receipt.artifact_dir:
-        print(f"[OK] Parasite drag artifacts stored under {results_root / parasite_receipt.artifact_dir}")
+        run_logger.info(
+            "Parasite drag artifacts stored",
+            context={"path": str(results_root / parasite_receipt.artifact_dir)},
+        )
 
-    print("[DONE] Smoke test (ticket/receipt) complete.")
+    run_logger.info("Smoke test complete")
     if stab_receipt.artifact_dir:
-        print(f"       Stability artifacts: {results_root / stab_receipt.artifact_dir}")
+        run_logger.info(
+            "Stability artifact directory",
+            context={"path": str(results_root / stab_receipt.artifact_dir)},
+        )
     if parasite_receipt.artifact_dir:
-        print(f"       Parasite drag artifacts: {results_root / parasite_receipt.artifact_dir}")
+        run_logger.info(
+            "Parasite drag artifact directory",
+            context={"path": str(results_root / parasite_receipt.artifact_dir)},
+        )
 
 # -------------------------
 # CLI entry point
@@ -452,6 +529,16 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(
         prog="streamline",
         description="Streamline project bootstrap & analysis harness",
+    )
+    parser.add_argument(
+        "--log-level",
+        default=os.environ.get("STREAMLINE_LOG_LEVEL", "INFO"),
+        help="Logging level (default: INFO or STREAMLINE_LOG_LEVEL env)",
+    )
+    parser.add_argument(
+        "--log-file",
+        default=os.environ.get("STREAMLINE_LOG_FILE"),
+        help="Optional log file path (default: STREAMLINE_LOG_FILE env)",
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
 
@@ -507,107 +594,143 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     args = parser.parse_args(argv)
 
-    if args.cmd == "init":
-        projects_root = ensure_dir(Path(args.projects_root))
-        proj = create_new_project(projects_root, args.project_id)
-        manager = AnalysisManager(open_gui=False)
-        vsp = manager.vsp
-        if vsp is None:
-            raise RuntimeError("Failed to initialize OpenVSP context")
-        with manager.vsp_guard():
-            create_empty_vsp3(vsp, proj / f"{args.project_id}.vsp3")
-        print(f"[OK] Project created at: {proj}")
-        print(f"     OpenVSP model: {proj / (args.project_id + '.vsp3')}")
-        return 0
+    log_file = Path(args.log_file).expanduser().resolve() if args.log_file else None
+    setup_logging(LoggingConfig(level=args.log_level, logfile=log_file))
+    cli_logger = logger.bind(command=args.cmd)
 
-    if args.cmd == "gui":
-        manager = AnalysisManager(open_gui=True)
-        vsp = manager.vsp
-        if vsp is None:
-            raise RuntimeError("Failed to initialize OpenVSP context")
-        print("[OK] OpenVSP GUI launched.")
-        return 0
-
-    if args.cmd == "configs":
-        projects_root = ensure_dir(Path(args.projects_root))
-        proj = ensure_dir(projects_root / args.project_id)
-        try:
-            catalog = load_config_catalog(proj)
-        except ConfigCatalogError as exc:
-            print(f"[ERROR] {exc}")
-            return 1
-        if not catalog:
-            print("[WARN] No configurations found.")
-        else:
-            print(f"[INFO] Configurations for project '{args.project_id}':")
-            for summary in catalog:
-                mode = summary.mode_id or "(no mode)"
-                set_label = summary.set_name if summary.set_name is not None else summary.set_index
-                presets = "yes" if summary.has_presets else "no"
-                print(f"   - {summary.config_id} (mode={mode}, set={set_label}, presets={presets})")
-                if summary.notes:
-                    print(f"       notes: {summary.notes}")
-        return 0
-
-    if args.cmd == "ops":
-        projects_root = ensure_dir(Path(args.projects_root))
-        proj = ensure_dir(projects_root / args.project_id)
-        try:
-            catalog = load_op_catalog(proj)
-        except OperatingPointCatalogError as exc:
-            print(f"[ERROR] {exc}")
-            return 1
-        if not catalog:
-            print("[WARN] No operating points found.")
-        else:
-            print(f"[INFO] Operating points for project '{args.project_id}':")
-            for summary in catalog:
-                mach = summary.mach if summary.mach is not None else "n/a"
-                tas = summary.tas_mps if summary.tas_mps is not None else "n/a"
-                print(f"   - {summary.op_id}: alt={summary.altitude_m} m, Mach={mach}, TAS={tas}")
-                if summary.notes:
-                    print(f"       notes: {summary.notes}")
-        return 0
-
-    if args.cmd == "results":
-        projects_root = ensure_dir(Path(args.projects_root))
-        proj = ensure_dir(projects_root / args.project_id)
-        entries = load_result_entries(proj)
-        if args.analysis:
-            entries = [e for e in entries if e.analysis == args.analysis]
-        if args.op:
-            entries = [e for e in entries if (e.summary or {}).get("operating_point_id") == args.op]
-        if not entries:
-            print("[INFO] No results recorded yet.")
-            return 0
-        entries.sort(
-            key=lambda e: (
-                e.manifest.started_utc if e.manifest and e.manifest.started_utc else ""
-            ),
-            reverse=True,
-        )
-        limit = args.limit if args.limit is not None and args.limit > 0 else len(entries)
-        print(f"[INFO] Showing {min(limit, len(entries))} of {len(entries)} entries")
-        for entry in entries[:limit]:
-            started = entry.manifest.started_utc if entry.manifest and entry.manifest.started_utc else "?"
-            summary = entry.summary or {}
-            config_summary = summary.get("config_id") or summary.get("configuration_id") or "-"
-            set_summary = summary.get("set_name") or summary.get("set_index") or "-"
-            mode_summary = summary.get("mode_id") or "-"
-            op_summary = summary.get("operating_point_id") or "-"
-            print(
-                f" - {started} | analysis={entry.analysis} | config={config_summary} | "
-                f"set={set_summary} | mode={mode_summary} | op={op_summary}"
+    try:
+        if args.cmd == "init":
+            projects_root = ensure_dir(Path(args.projects_root))
+            proj = create_new_project(projects_root, args.project_id)
+            manager = AnalysisManager(open_gui=False)
+            vsp = manager.vsp
+            if vsp is None:
+                raise StreamlineError(
+                    "Failed to initialize OpenVSP context",
+                    context={"command": "init"},
+                )
+            with manager.vsp_guard():
+                create_empty_vsp3(vsp, proj / f"{args.project_id}.vsp3")
+            cli_logger.info(
+                "Project scaffold created",
+                context={
+                    "project_id": args.project_id,
+                    "project_path": str(proj),
+                    "vsp_model": str(proj / f"{args.project_id}.vsp3"),
+                },
             )
-            if entry.artifact_dir:
-                print(f"     artifacts: results/{entry.artifact_dir}")
-            if entry.ticket_sha256:
-                print(f"     ticket hash: {entry.ticket_sha256}")
-        return 0
+            return 0
 
-    if args.cmd == "smoke":
-        projects_root = ensure_dir(Path(args.projects_root))
-        try:
+        if args.cmd == "gui":
+            manager = AnalysisManager(open_gui=True)
+            vsp = manager.vsp
+            if vsp is None:
+                raise StreamlineError(
+                    "Failed to initialize OpenVSP context",
+                    context={"command": "gui"},
+                )
+            cli_logger.info("OpenVSP GUI launched")
+            return 0
+
+        if args.cmd == "configs":
+            projects_root = ensure_dir(Path(args.projects_root))
+            proj = ensure_dir(projects_root / args.project_id)
+            catalog = load_config_catalog(proj)
+            if not catalog:
+                cli_logger.warning(
+                    "No configurations found",
+                    context={"project_id": args.project_id},
+                )
+            else:
+                for summary in catalog:
+                    cli_logger.info(
+                        "Configuration",
+                        context={
+                            "project_id": args.project_id,
+                            "config_id": summary.config_id,
+                            "mode": summary.mode_id or "(none)",
+                            "set": summary.set_name if summary.set_name is not None else summary.set_index,
+                            "has_presets": summary.has_presets,
+                            "notes": summary.notes or None,
+                        },
+                    )
+            return 0
+
+        if args.cmd == "ops":
+            projects_root = ensure_dir(Path(args.projects_root))
+            proj = ensure_dir(projects_root / args.project_id)
+            catalog = load_op_catalog(proj)
+            if not catalog:
+                cli_logger.warning(
+                    "No operating points found",
+                    context={"project_id": args.project_id},
+                )
+            else:
+                for summary in catalog:
+                    cli_logger.info(
+                        "Operating point",
+                        context={
+                            "project_id": args.project_id,
+                            "op_id": summary.op_id,
+                            "altitude_m": summary.altitude_m,
+                            "mach": summary.mach,
+                            "tas_mps": summary.tas_mps,
+                            "notes": summary.notes or None,
+                        },
+                    )
+            return 0
+
+        if args.cmd == "results":
+            projects_root = ensure_dir(Path(args.projects_root))
+            proj = ensure_dir(projects_root / args.project_id)
+            entries = load_result_entries(proj)
+            if args.analysis:
+                entries = [e for e in entries if e.analysis == args.analysis]
+            if args.op:
+                entries = [e for e in entries if (e.summary or {}).get("operating_point_id") == args.op]
+            if not entries:
+                cli_logger.info(
+                    "No results recorded",
+                    context={"project_id": args.project_id},
+                )
+                return 0
+            entries.sort(
+                key=lambda e: (
+                    e.manifest.started_utc if e.manifest and e.manifest.started_utc else ""
+                ),
+                reverse=True,
+            )
+            limit = args.limit if args.limit is not None and args.limit > 0 else len(entries)
+            cli_logger.info(
+                "Results summary",
+                context={
+                    "project_id": args.project_id,
+                    "requested_limit": args.limit,
+                    "showing": min(limit, len(entries)),
+                    "total": len(entries),
+                },
+            )
+            for entry in entries[:limit]:
+                started = entry.manifest.started_utc if entry.manifest and entry.manifest.started_utc else "?"
+                summary = entry.summary or {}
+                cli_logger.info(
+                    "Result entry",
+                    context={
+                        "started": started,
+                        "analysis": entry.analysis,
+                        "config": summary.get("config_id")
+                        or summary.get("configuration_id"),
+                        "set": summary.get("set_name") or summary.get("set_index"),
+                        "mode": summary.get("mode_id"),
+                        "operating_point": summary.get("operating_point_id"),
+                        "artifacts": entry.artifact_dir,
+                        "ticket_sha": entry.ticket_sha256,
+                    },
+                )
+            return 0
+
+        if args.cmd == "smoke":
+            projects_root = ensure_dir(Path(args.projects_root))
             smoke_run(
                 projects_root,
                 args.project_id,
@@ -617,12 +740,16 @@ def main(argv: Optional[list[str]] = None) -> int:
                 config_id=args.config_id,
                 op_id=args.op_id,
             )
-        except (ValueError, RuntimeError, ConfigCatalogError, OperatingPointCatalogError) as exc:
-            print(f"[ERROR] {exc}")
-            return 1
+            return 0
+
         return 0
 
-    return 0
+    except StreamlineError as exc:
+        _log_streamline_error(exc)
+        return 1
+    except Exception as exc:  # pragma: no cover - CLI guardrail
+        _log_unhandled_error(exc, context={"command": getattr(args, "cmd", None)})
+        return 1
 
 
 if __name__ == "__main__":

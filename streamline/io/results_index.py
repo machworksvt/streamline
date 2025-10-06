@@ -1,10 +1,11 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from ..core.logging import get_logger
 from ..core.schema import RunManifest
 
 
@@ -59,6 +60,7 @@ def append_result_entry(project_root: Path, entry: ResultIndexEntry) -> None:
 
 
 def load_result_entries(project_root: Path) -> List[ResultIndexEntry]:
+    logger = get_logger(__name__, project=str(project_root))
     data = load_results_index(project_root)
     entries: List[ResultIndexEntry] = []
     for raw in data.get("entries", []):
@@ -67,7 +69,15 @@ def load_result_entries(project_root: Path) -> List[ResultIndexEntry]:
         if manifest_raw:
             try:
                 manifest = RunManifest.model_validate(manifest_raw)
-            except Exception:
+            except Exception as exc:  # pragma: no cover - defensive logging
+                logger.warning(
+                    "Failed to validate manifest for result entry",
+                    context={
+                        "ticket_sha256": raw.get("ticket_sha256"),
+                        "analysis": raw.get("analysis"),
+                    },
+                    hint=str(exc),
+                )
                 manifest = None
         entries.append(
             ResultIndexEntry(
