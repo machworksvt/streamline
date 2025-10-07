@@ -1,17 +1,23 @@
 # streamline/vsp/analyses/parasite_drag.py
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+import json
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 import pandas as pd
 
-from ...core.schema import Configuration, OperatingPoint
+from ...core.schema import Configuration, OperatingPoint, RunManifest
+from ...io.results_index import ResultIndexEntry, append_result_entry
 from ..configure import AppliedConfiguration, apply_configuration
 from ..operating_point import AppliedOperatingPoint, apply_operating_point
 from ..errors import VSPMissingResults
 from ..sets import choose_populated_set
+from ..run_utils import dump_json, prepare_results_dir, relativize
 from ..util import as_list, apply_udp_overrides
-from ..contracts.parasite_drag import ParasiteDragTicket, ParasiteDragPayload
+from .materializer_utils import df_to_split_dict, store_dataframe
+from ..contracts.parasite_drag import ParasiteDragTicket, ParasiteDragPayload, ParasiteDragReceipt
 
 _ANALYSIS_KEY = "parasite_drag"
 
@@ -356,4 +362,113 @@ def run_parasite_drag(
         flight_condition=flight_condition,
         components=components_df,
         excrescence=exc_df,
+    )
+
+
+
+
+def _materialize_parasite_drag(
+    manager: 'AnalysisManager',
+    job: 'AnalysisJob',
+    ticket_sha: str,
+    payload: ParasiteDragPayload,
+    started: datetime,
+    ended: datetime,
+) -> ParasiteDragReceipt:
+    if not isinstance(payload, ParasiteDragPayload):
+        raise TypeError("Expected ParasiteDragPayload, got {}".format(type(payload).__name__))
+
+    results_root = manager.results_root
+    artifacts: Dict[str, str] = {}
+    artifact_dir_rel: Optional[str] = None
+    artifact_dir_path: Optional[Path] = None
+
+    ticket_payload = json.loads(job.ticket.model_dump_json(exclude_none=True, exclude_defaults=False))
+    context_payload = dict(job.context_extras)
+    if payload.parm_overrides:
+        context_payload.setdefault("parm_overrides", payload.parm_overrides)
+
+    if results_root is not None:
+        run_dir = prepare_results_dir(results_root, job.analysis_key, ticket_sha, started)
+        artifact_dir_path = run_dir
+        artifact_dir_rel = relativize(run_dir, results_root)
+
+        if context_payload.get("config_id") and "config_id" not in ticket_payload:
+            ticket_payload["config_id"] = context_payload["config_id"]
+        if context_payload.get("mode_id") and "mode_id" not in ticket_payload:
+            ticket_payload["mode_id"] = context_payload["mode_id"]
+        if context_payload.get("operating_point_id") and "operating_point_id" not in ticket_payload:
+            ticket_payload["operating_point_id"] = context_payload["operating_point_id"]
+
+        dump_json(run_dir / "ticket.json", ticket_payload)
+        artifacts["ticket_json"] = relativize(run_dir / "ticket.json", results_root)
+
+        if payload.components is not None:
+            components_path = run_dir / "components.csv"
+            store_dataframe(payload.components, components_path)
+            artifacts["components_csv"] = relativize(components_path, results_root)
+        if payload.excrescence is not None:
+            exc_path = run_dir / "excrescence.csv"
+            store_dataframe(payload.excrescence, exc_path)
+            artifacts["excrescence_csv"] = relativize(exc_path, results_root)
+
+        summary_payload = {
+            "totals": payload.totals,
+            "labels": payload.labels,
+            "flight_condition": payload.flight_condition,
+            "context": context_payload,
+        }
+        dump_json(run_dir / "summary.json", summary_payload)
+        artifacts["summary_json"] = relativize(run_dir / "summary.json", results_root)
+
+    manifest = RunManifest(
+        tool_versions=manager.versions,
+        inputs_sha256=ticket_sha,
+        started_utc=started.isoformat(timespec="seconds") + "Z",
+        ended_utc=ended.isoformat(timespec="seconds") + "Z",
+        source_paths=[artifact_dir_rel] if artifact_dir_rel is not None else [],
+    )
+
+    if results_root is not None and artifact_dir_path is not None:
+        manifest_path = artifact_dir_path / "run_manifest.json"
+        dump_json(manifest_path, manifest.model_dump())
+        artifacts["run_manifest_json"] = relativize(manifest_path, results_root)
+
+        op_summary = payload.operating_point or {}
+        append_result_entry(
+            results_root.parent,
+            ResultIndexEntry(
+                analysis=job.analysis_key,
+                ticket_sha256=ticket_sha,
+                artifact_dir=artifact_dir_rel,
+                summary={
+                    "config_id": context_payload.get("config_id"),
+                    "mode_id": context_payload.get("mode_id"),
+                    "operating_point_id": context_payload.get("operating_point_id"),
+                    "altitude_m": op_summary.get("altitude_m"),
+                    "mach": op_summary.get("mach") or context_payload.get("mach"),
+                    "total_cd": payload.totals.get("total_cd") if payload.totals else None,
+                },
+                manifest=manifest,
+            ),
+        )
+
+    totals = payload.totals or {}
+    return ParasiteDragReceipt(
+        vsp_results_id=payload.results_id,
+        total_cd=totals.get("total_cd"),
+        total_f=totals.get("total_f"),
+        geom_cd_total=totals.get("geom_cd_total"),
+        geom_f_total=totals.get("geom_f_total"),
+        excres_cd_total=totals.get("excres_cd_total"),
+        excres_f_total=totals.get("excres_f_total"),
+        labels=payload.labels,
+        flight_condition=payload.flight_condition,
+        operating_point=payload.operating_point,
+        components=df_to_split_dict(payload.components),
+        excrescence=df_to_split_dict(payload.excrescence),
+        run_manifest=manifest,
+        ticket_sha256=ticket_sha,
+        artifact_dir=artifact_dir_rel,
+        artifacts=artifacts,
     )

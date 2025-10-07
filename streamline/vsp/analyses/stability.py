@@ -6,7 +6,8 @@ from typing import Any, Dict, List, Optional
 
 import pandas as pd
 
-from ...core.schema import Configuration, OperatingPoint
+from ...core.schema import Configuration, OperatingPoint, RunManifest
+from ...io.results_index import ResultIndexEntry, append_result_entry
 from ..configure import AppliedConfiguration, apply_configuration
 from ..operating_point import AppliedOperatingPoint, apply_operating_point
 from ..errors import VSPMissingResults
@@ -17,9 +18,11 @@ from ..util import (
     get_control_group_names,
 )
 from ..sets import choose_populated_set
-from ..contracts.stability import StabilityTicket, StabilityPayload
+from ..run_utils import dump_json, prepare_results_dir, relativize
+from ..contracts.stability import StabilityTicket, StabilityPayload, StabilityReceipt
 from ..contracts.compute_geometry import ComputeGeometryTicket
 from .compute_geometry import run_compute_geometry
+from .materializer_utils import df_to_split_dict, store_dataframe
 
 
 _STAB_AXES = ["CD", "CS", "CL", "CMl", "CMm", "CMn"]
@@ -360,3 +363,119 @@ def run_stability(
 
 
 
+
+
+
+
+
+
+
+
+def _materialize_stability(
+    manager: 'AnalysisManager',
+    job: 'AnalysisJob',
+    ticket_sha: str,
+    payload: StabilityPayload,
+    started: datetime,
+    ended: datetime,
+) -> StabilityReceipt:
+    if not isinstance(payload, StabilityPayload):
+        raise TypeError("Expected StabilityPayload, got {}".format(type(payload).__name__))
+
+    results_root = manager.results_root
+    artifacts: Dict[str, str] = {}
+    artifact_dir_rel: Optional[str] = None
+    artifact_dir_path: Optional[Path] = None
+
+    ticket_payload = json.loads(job.ticket.model_dump_json(exclude_none=True, exclude_defaults=False))
+    context_payload = dict(job.context_extras)
+    if payload.parm_overrides:
+        context_payload.setdefault("parm_overrides", payload.parm_overrides)
+
+    if results_root is not None:
+        run_dir = prepare_results_dir(results_root, job.analysis_key, ticket_sha, started)
+        artifact_dir_path = run_dir
+        artifact_dir_rel = relativize(run_dir, results_root)
+
+        op_id = context_payload.get("operating_point_id")
+        if context_payload.get("config_id") and "config_id" not in ticket_payload:
+            ticket_payload["config_id"] = context_payload["config_id"]
+        if context_payload.get("mode_id") and "mode_id" not in ticket_payload:
+            ticket_payload["mode_id"] = context_payload["mode_id"]
+        if op_id and "operating_point_id" not in ticket_payload:
+            ticket_payload["operating_point_id"] = op_id
+
+        dump_json(run_dir / "ticket.json", ticket_payload)
+        artifacts["ticket_json"] = relativize(run_dir / "ticket.json", results_root)
+
+        store_dataframe(payload.base_stab, run_dir / "base_stability_axes.csv")
+        store_dataframe(payload.base_body, run_dir / "base_body_axes.csv")
+        store_dataframe(payload.derivs_stab, run_dir / "derivs_stability_axes.csv")
+        store_dataframe(payload.derivs_body, run_dir / "derivs_body_axes.csv")
+        if payload.base_stab is not None:
+            artifacts["base_stability_axes_csv"] = relativize(run_dir / "base_stability_axes.csv", results_root)
+        if payload.base_body is not None:
+            artifacts["base_body_axes_csv"] = relativize(run_dir / "base_body_axes.csv", results_root)
+        if payload.derivs_stab is not None:
+            artifacts["derivs_stability_axes_csv"] = relativize(run_dir / "derivs_stability_axes.csv", results_root)
+        if payload.derivs_body is not None:
+            artifacts["derivs_body_axes_csv"] = relativize(run_dir / "derivs_body_axes.csv", results_root)
+
+        summary_payload = {
+            "static_margin": payload.static_margin,
+            "x_np_m": payload.x_np_m,
+            "flight_condition": payload.flight_condition,
+            "control_groups": payload.control_groups,
+            "context": context_payload,
+        }
+        dump_json(run_dir / "summary.json", summary_payload)
+        artifacts["summary_json"] = relativize(run_dir / "summary.json", results_root)
+
+    manifest = RunManifest(
+        tool_versions=manager.versions,
+        inputs_sha256=ticket_sha,
+        started_utc=started.isoformat(timespec="seconds") + "Z",
+        ended_utc=ended.isoformat(timespec="seconds") + "Z",
+        source_paths=[artifact_dir_rel] if artifact_dir_rel is not None else [],
+    )
+
+    if results_root is not None and artifact_dir_path is not None:
+        manifest_path = artifact_dir_path / "run_manifest.json"
+        dump_json(manifest_path, manifest.model_dump())
+        artifacts["run_manifest_json"] = relativize(manifest_path, results_root)
+
+        op_summary = payload.operating_point or {}
+        append_result_entry(
+            results_root.parent,
+            ResultIndexEntry(
+                analysis=job.analysis_key,
+                ticket_sha256=ticket_sha,
+                artifact_dir=artifact_dir_rel,
+                summary={
+                    "config_id": context_payload.get("config_id"),
+                    "mode_id": context_payload.get("mode_id"),
+                    "operating_point_id": context_payload.get("operating_point_id"),
+                    "altitude_m": op_summary.get("altitude_m"),
+                    "mach": op_summary.get("mach") or context_payload.get("mach"),
+                    "static_margin": payload.static_margin,
+                },
+                manifest=manifest,
+            ),
+        )
+
+    return StabilityReceipt(
+        vsp_results_id=payload.results_id,
+        static_margin=payload.static_margin,
+        x_np_m=payload.x_np_m,
+        base_stab=df_to_split_dict(payload.base_stab),
+        base_body=df_to_split_dict(payload.base_body),
+        derivs_stab=df_to_split_dict(payload.derivs_stab),
+        derivs_body=df_to_split_dict(payload.derivs_body),
+        flight_condition=payload.flight_condition,
+        control_groups=payload.control_groups,
+        operating_point=payload.operating_point,
+        run_manifest=manifest,
+        ticket_sha256=ticket_sha,
+        artifact_dir=artifact_dir_rel,
+        artifacts=artifacts,
+    )

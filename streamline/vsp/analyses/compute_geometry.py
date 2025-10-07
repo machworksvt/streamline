@@ -1,16 +1,25 @@
 # streamline/vsp/analyses/compute_geometry.py
 from __future__ import annotations
 
-from typing import Dict, Optional
+import json
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, Optional, TYPE_CHECKING
 
-from ...core.schema import Configuration
+from ...core.schema import Configuration, RunManifest
+from ...io.results_index import ResultIndexEntry, append_result_entry
 from ..configure import AppliedConfiguration, apply_configuration
 from ..sets import choose_populated_set
 from ..util import as_list, apply_udp_overrides
 from ..contracts.compute_geometry import (
     ComputeGeometryTicket,
     ComputeGeometryPayload,
+    ComputeGeometryReceipt,
 )
+from ..run_utils import dump_json, prepare_results_dir, relativize
+
+if TYPE_CHECKING:
+    from ...analysis.manager import AnalysisJob, AnalysisManager
 
 
 def _resolve_set_index(
@@ -132,3 +141,82 @@ def run_compute_geometry(
 
 
 
+
+
+def _materialize_compute_geometry(
+    manager: 'AnalysisManager',
+    job: 'AnalysisJob',
+    ticket_sha: str,
+    payload: ComputeGeometryPayload,
+    started: datetime,
+    ended: datetime,
+) -> ComputeGeometryReceipt:
+    if not isinstance(payload, ComputeGeometryPayload):
+        raise TypeError("Expected ComputeGeometryPayload, got {}".format(type(payload).__name__))
+
+    results_root = manager.results_root
+    artifacts: Dict[str, str] = {}
+    artifact_dir_rel: Optional[str] = None
+    artifact_dir_path: Optional[Path] = None
+
+    settings = {
+        "analysis": payload.analysis_name,
+        "analysis_method": payload.analysis_method,
+        "set_index": payload.set_index,
+        "set_name": payload.set_name,
+        "mode_id": payload.mode_id,
+        "use_mode_flag": payload.use_mode_flag,
+        "applied_var_presets": payload.applied_var_presets,
+        "parm_overrides": payload.parm_overrides,
+        "symmetry": payload.symmetry,
+        "alternate_input_format_flag": payload.alternate_input_format_flag,
+    }
+
+    if results_root is not None:
+        run_dir = prepare_results_dir(results_root, job.analysis_key, ticket_sha, started)
+        artifact_dir_path = run_dir
+        artifact_dir_rel = relativize(run_dir, results_root)
+
+        ticket_payload = json.loads(job.ticket.model_dump_json(exclude_none=True, exclude_defaults=False))
+        dump_json(run_dir / "ticket.json", ticket_payload)
+        artifacts["ticket_json"] = relativize(run_dir / "ticket.json", results_root)
+
+        dump_json(run_dir / "settings.json", settings)
+        artifacts["settings_json"] = relativize(run_dir / "settings.json", results_root)
+
+    manifest = RunManifest(
+        tool_versions=manager.versions,
+        inputs_sha256=ticket_sha,
+        started_utc=started.isoformat(timespec="seconds") + "Z",
+        ended_utc=ended.isoformat(timespec="seconds") + "Z",
+        source_paths=[artifact_dir_rel] if artifact_dir_rel is not None else [],
+    )
+
+    if results_root is not None and artifact_dir_path is not None:
+        manifest_path = artifact_dir_path / "run_manifest.json"
+        dump_json(manifest_path, manifest.model_dump())
+        artifacts["run_manifest_json"] = relativize(manifest_path, results_root)
+
+        append_result_entry(
+            results_root.parent,
+            ResultIndexEntry(
+                analysis=job.analysis_key,
+                ticket_sha256=ticket_sha,
+                artifact_dir=artifact_dir_rel,
+                summary={
+                    "set_index": payload.set_index,
+                    "set_name": payload.set_name,
+                    "mode_id": payload.mode_id,
+                    "use_mode_flag": payload.use_mode_flag,
+                },
+                manifest=manifest,
+            ),
+        )
+
+    return ComputeGeometryReceipt(
+        run_manifest=manifest,
+        ticket_sha256=ticket_sha,
+        artifact_dir=artifact_dir_rel,
+        artifacts=artifacts,
+        settings=settings,
+    )
