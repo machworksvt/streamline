@@ -5,6 +5,7 @@ import json
 import os
 import platform
 import shutil
+import site
 import sys
 import sysconfig
 import tarfile
@@ -221,11 +222,43 @@ def install_runtime(
 
     python_dir = install_root / platform_spec.python_subdir
     if create_pth:
-        site_dir = site_packages_dir or Path(sysconfig.get_paths()["purelib"])
-        ensure_directory(site_dir)
-        pth_path = site_dir / PTH_FILENAME
-        with pth_path.open("w", encoding="utf-8") as handle:
-            handle.write(str(python_dir.resolve()) + os.linesep)
+        pth_written = False
+        candidate_dirs: List[Path] = []
+
+        if site_packages_dir:
+            candidate_dirs.append(site_packages_dir)
+        else:
+            # Prefer the active environment's purelib first, but gracefully fall back to
+            # the user site-packages directory when the environment is not writable
+            # (common on shared/managed Python installs).
+            candidate_dirs.append(Path(sysconfig.get_paths()["purelib"]))
+
+            try:
+                user_site = Path(site.getusersitepackages())
+            except AttributeError:
+                user_site = None
+
+            if user_site:
+                candidate_dirs.append(user_site)
+
+        last_error: Optional[Exception] = None
+        for site_dir in candidate_dirs:
+            try:
+                ensure_directory(site_dir)
+                pth_path = site_dir / PTH_FILENAME
+                with pth_path.open("w", encoding="utf-8") as handle:
+                    handle.write(str(python_dir.resolve()) + os.linesep)
+                pth_written = True
+                break
+            except PermissionError as exc:
+                last_error = exc
+                continue
+
+        if not pth_written:
+            raise RuntimeError(
+                "Unable to write OpenVSP .pth file into any site-packages directory",
+                {"directories": [str(p) for p in candidate_dirs], "error": str(last_error) if last_error else None},
+            )
 
     return build_result(
         version=version,
