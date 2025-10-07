@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure OpenVSP environment
+        shell: pwsh
+        run: |
+          $root = "${{ github.workspace }}\OpenVSP-3.42.3-win64"
+          echo "OPENVSP_ROOT=$root" >> $env:GITHUB_ENV
+          echo "PYTHONPATH=${{ github.workspace }};$root\python" >> $env:GITHUB_ENV
+          echo "PATH=$root;$root\python;$root\scripts;$root\vspaero_ex;$env:PATH" >> $env:GITHUB_ENV
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Run tests
+        run: pytest
