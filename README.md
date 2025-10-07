@@ -6,7 +6,7 @@ Streamline can be developed on Windows, macOS, or Linux using a standard Python 
 
 1. **Install Python packages** – `pip install -r requirements.txt` (or use `environment.yml` with Conda).
 2. **Provision OpenVSP** – run `python -m tools.install_openvsp` once per machine/CI worker. The runtime is cached under `~/.cache/openvsp/<version>` by default, so repeated test runs are fast.
-3. **Run the test suite** – the real OpenVSP runtime is expected; set `STREAMLINE_ALLOW_VSP_STUB=1` only when you intentionally want the stubbed implementation.
+3. **Run the test suite** – install the real OpenVSP runtime for full coverage. A lightweight stub is used automatically when OpenVSP is unavailable; set `STREAMLINE_ALLOW_VSP_STUB=0` to require the real bindings (as CI does).
 
 The sections below expand each step with additional context and troubleshooting tips.
 
@@ -60,14 +60,14 @@ The Python bindings usually work out-of-the-box once the `.pth` file is present.
 
 ## 4. Running tests
 
-By default the test suite expects a real OpenVSP runtime. To temporarily allow the in-memory stub, opt-in explicitly:
+By default the test suite falls back to an in-memory stub if the OpenVSP runtime is unavailable. To require the real bindings (matching CI), opt-in explicitly:
 
 ```bash
-export STREAMLINE_ALLOW_VSP_STUB=1  # or set in PowerShell/Command Prompt
+export STREAMLINE_ALLOW_VSP_STUB=0  # or set in PowerShell/Command Prompt
 pytest
 ```
 
-When the variable is **not** set, tests fail if OpenVSP is missing – the same behaviour used in CI.
+When the variable is **not** set, tests skip OpenVSP-dependent cases if the runtime is missing.
 
 ## Legacy PowerShell bootstrapper
 

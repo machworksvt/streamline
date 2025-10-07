@@ -63,4 +63,6 @@ with Path(os.environ["GITHUB_PATH"]).open("a", encoding="utf-8") as handle:
 PY
 
       - name: Run tests
+        env:
+          STREAMLINE_ALLOW_VSP_STUB: "0"
         run: pytest

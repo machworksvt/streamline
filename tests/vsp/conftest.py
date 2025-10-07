@@ -10,7 +10,10 @@ _ALLOWED_STUB_VALUES = {"1", "true", "yes", "on"}
 
 
 def _stub_allowed() -> bool:
-    return os.getenv("STREAMLINE_ALLOW_VSP_STUB", "").strip().lower() in _ALLOWED_STUB_VALUES
+    value = os.getenv("STREAMLINE_ALLOW_VSP_STUB")
+    if value is None:
+        return True
+    return value.strip().lower() in _ALLOWED_STUB_VALUES
 
 
 @pytest.fixture(scope="session")

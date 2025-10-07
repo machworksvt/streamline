@@ -9,7 +9,17 @@ from typing import Any, Dict, Optional
 from ..core.logging import get_logger
 
 
-_ALLOW_STUB = os.getenv("STREAMLINE_ALLOW_VSP_STUB", "").lower() in {"1", "true", "yes", "on"}
+_TRUTHY = {"1", "true", "yes", "on"}
+
+
+def _allow_stub() -> bool:
+    value = os.getenv("STREAMLINE_ALLOW_VSP_STUB")
+    if value is None:
+        return True
+    return value.strip().lower() in _TRUTHY
+
+
+_ALLOW_STUB = _allow_stub()
 
 
 class _FakeOpenVSP:
