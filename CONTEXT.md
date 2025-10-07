@@ -1,4 +1,4 @@
-﻿# Streamline Project Deep Overview
+# Streamline Project Deep Overview
 
 ## 0. Mission & Scope
 - Streamline extends NASA's OpenVSP Python API into a stability-and-control focused aircraft design workbench aimed at GNC workflows and accessible to undergraduate design teams.
@@ -165,7 +165,7 @@ Structured models keep JSON on disk and payloads in memory consistent.
 - Global airfoil assets live under `data/airfoils/`; per-project tuned variants will be stored within each project for versioned analysis.
 - A future XFOIL loop will populate or refine these files and feed OpenVSP updates via UDPs or geometry edits.
 
-## 13. UI (Textual) — planned shape
+## 13. UI (Textual) � planned shape
 - The planned Textual TUI will provide panes for set/mode exploration, quick analyses, and discipline-focused views (S&C, mission, structures).
 - Immediate edits initiated by users will persist instantly; tool-driven edits may be staged via `StagedEditBatch` models for review before application.
 - Keyboard and pointer interactions will be supported, with the UI operating on a single project context at a time.
@@ -187,6 +187,7 @@ Structured models keep JSON on disk and payloads in memory consistent.
 - Activate the environment, initialize a project, edit geometry in OpenVSP, and use the smoke pipeline to generate stability/drag artifacts.
 - Logging is configurable via CLI flags or environment variables (`STREAMLINE_LOG_LEVEL`, `STREAMLINE_LOG_FILE`).
 - GitHub Actions (`.github/workflows/tests.yml`) runs `pytest` on every push/PR using the repository requirements, so new tests need to remain CLI-friendly and guard against missing OpenVSP bindings.
+- To exercise the native OpenVSP API, make sure the vendor bundle is unpacked and both `PATH` and `PYTHONPATH` point at its `python/` directory (extend the CI workflow to download the official release when full fidelity is required).
 
 ## 17. Current Code: Notable Functions & Responsibilities
 - `main.smoke_run` demonstrates end-to-end orchestration, dependency key assignment, and queue-driven execution for compute-geometry, stability, and parasite-drag analyses.
@@ -196,7 +197,7 @@ Structured models keep JSON on disk and payloads in memory consistent.
 - `core/schema.py` defines the persistent and runtime models; `core/logging.py` and `core/errors.py` standardize logging and exception handling.
 - `io/config_catalog.py` and `io/op_catalog.py` load project catalogs; `io/results_index.py` maintains the artifact ledger.
 - `vsp/analyses/*` house the pure OpenVSP calls; `vsp/contracts/*` define the tickets, payloads, and receipts they consume/produce.
-- `vsp/test_factory.py` offers CI-friendly helpers to generate canonical OpenVSP geometry for tests (skipping automatically when bindings are unavailable).
+- `vsp/test_factory.py` offers CI-friendly helpers to generate canonical OpenVSP geometry for tests, falling back to an in-memory stub when native bindings or DLLs are unreachable.
 - `vsp/run_utils.py`, `vsp/results.py`, and `vsp/util.py` hold shared helpers for JSON dumping, CSV writing, list coercion, and control group discovery.
 
 ## 18. Design Alternatives (Sets) & Configurations (Modes/Presets)
@@ -218,6 +219,10 @@ Structured models keep JSON on disk and payloads in memory consistent.
 - Separation: Higher layers submit jobs; only materializers touch the filesystem, producing inspectable artifacts and a durable index.
 - Extensibility: Adding a new analysis means introducing a ticket/payload/receipt trio and registering it with the manager; surrounding infrastructure stays unchanged.
 - Transparency: Every run writes tickets, summaries, and manifests so manual inspection, debugging, and future reporting remain straightforward.
+
+
+
+
 
 
 

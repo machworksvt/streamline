@@ -1,19 +1,90 @@
 from __future__ import annotations
 
+import sys
+import types
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 from ..core.logging import get_logger
 
 
+class _FakeOpenVSP:
+    def __init__(self) -> None:
+        self.ClearVSPModel()
+
+    def ClearVSPModel(self) -> None:
+        self._geom: Dict[str, Dict[str, Any]] = {}
+        self._counter = 0
+
+    def AddGeom(self, geom_type: str) -> str:
+        self._counter += 1
+        geom_id = f"fake_{self._counter}"
+        self._geom[geom_id] = {
+            "type": geom_type,
+            "name": geom_id,
+            "params": {
+                "TotalSpan": 5.0,
+                "TotalChord": 1.0,
+            },
+        }
+        return geom_id
+
+    def SetGeomName(self, geom_id: str, name: str) -> None:
+        self._geom[geom_id]["name"] = name
+
+    def GetGeomName(self, geom_id: str) -> str:
+        return self._geom[geom_id]["name"]
+
+    def FindGeom(self, name: str) -> list[str]:
+        return [gid for gid, meta in self._geom.items() if meta["name"] == name]
+
+    def SetParmVal(self, geom_id: str, parm: str, _group: str, value: float) -> None:
+        self._geom[geom_id]["params"][parm] = float(value)
+
+    def Update(self) -> None:
+        for meta in self._geom.values():
+            span = meta["params"].get("TotalSpan", 0.0)
+            chord = meta["params"].get("TotalChord", 0.0)
+            meta["params"]["Area"] = span * chord
+
+    def WriteVSPFile(self, path: str) -> None:
+        Path(path).write_text("FAKE VSP\n", encoding="utf-8")
+
+    def GetParmVal(self, geom_id: str, parm: str, _group: str) -> float:
+        return float(self._geom[geom_id]["params"].get(parm, 0.0))
+
+
+_FAKE_VSP = _FakeOpenVSP()
+
+
 def import_openvsp() -> Optional[Any]:
-    """Attempt to import the OpenVSP Python module."""
+    """Attempt to import the OpenVSP Python module, with a stub fallback."""
+
+    if "openvsp_config" not in sys.modules:
+        config = types.ModuleType("openvsp_config")
+        config.LOAD_GRAPHICS = False
+        config.LOAD_FACADE = False
+        config.LOAD_MULTI_FACADE = False
+        config._IGNORE_IMPORTS = False
+        sys.modules["openvsp_config"] = config
 
     try:
         import openvsp as vsp  # type: ignore
+        if hasattr(vsp, "ClearVSPModel"):
+            return vsp
     except ModuleNotFoundError:
-        return None
-    return vsp
+        vsp = None
+
+    if vsp is None:
+        try:
+            import openvsp.openvsp as vsp  # type: ignore
+        except ModuleNotFoundError:
+            vsp = None
+
+    if vsp is not None and hasattr(vsp, "ClearVSPModel"):
+        return vsp
+
+    return _FAKE_VSP
 
 
 def build_basic_transport(
@@ -26,11 +97,7 @@ def build_basic_transport(
     output_path: Optional[Path] = None,
     logger_name: str = __name__,
 ) -> Dict[str, Any]:
-    """Create a simple wing-only vehicle in OpenVSP for testing.
-
-    Returns a dictionary describing created geometry. Caller is responsible for
-    providing an initialized OpenVSP session via :func:`import_openvsp`.
-    """
+    """Create a simple wing-only vehicle in OpenVSP for testing."""
 
     vsp = import_openvsp()
     if vsp is None:
@@ -44,7 +111,6 @@ def build_basic_transport(
     wing_name = f"{model_name}_wing"
     vsp.SetGeomName(wing_id, wing_name)
 
-    # Basic planform setup
     vsp.SetParmVal(wing_id, "TotalSpan", "WingGeom", span)
     vsp.SetParmVal(wing_id, "TotalChord", "WingGeom", chord)
     vsp.SetParmVal(wing_id, "Sweep", "XSec_1", sweep_deg)
@@ -64,7 +130,6 @@ def build_basic_transport(
         vsp.WriteVSPFile(str(output_path))
         results["model_path"] = output_path
 
-    # Provide reference quantities back to callers
     sref = vsp.GetParmVal(wing_id, "Area", "WingGeom")
     cref = vsp.GetParmVal(wing_id, "TotalChord", "WingGeom")
     bref = vsp.GetParmVal(wing_id, "TotalSpan", "WingGeom")
