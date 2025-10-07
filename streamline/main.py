@@ -579,6 +579,25 @@ def main(argv: Optional[list[str]] = None) -> int:
     p_results.add_argument("--op", default=None, help="Filter by operating point ID (optional)")
     p_results.add_argument("--limit", type=int, default=10, help="Maximum entries to show (default: 10)")
 
+    p_cache = sub.add_parser("cache", help="Inspect or clear cached analysis receipts")
+    p_cache.add_argument("project_id")
+    p_cache.add_argument(
+        "--projects-root",
+        default=str(repo_root_from_here() / "projects"),
+        help="Root folder for projects/ (default: ./projects)",
+    )
+    cache_sub = p_cache.add_subparsers(dest="cache_cmd", required=True)
+
+    p_cache_list = cache_sub.add_parser("list", help="List cached analysis receipts")
+    p_cache_list.add_argument("--analysis", action="append", dest="analysis", default=None, help="Filter by analysis key (repeatable)")
+    p_cache_list.add_argument("--ticket", action="append", dest="ticket", default=None, help="Filter by ticket SHA256 (repeatable)")
+    p_cache_list.add_argument("--include-deferred", action="store_true", help="Include cache entries pending registration")
+
+    p_cache_clear = cache_sub.add_parser("clear", help="Clear cached analysis receipts")
+    p_cache_clear.add_argument("--analysis", action="append", dest="analysis", default=None, help="Filter by analysis key (repeatable)")
+    p_cache_clear.add_argument("--ticket", action="append", dest="ticket", default=None, help="Filter by ticket SHA256 (repeatable)")
+    p_cache_clear.add_argument("--keep-results", action="store_true", help="Retain existing artifacts and results index entries")
+
     p_smoke = sub.add_parser("smoke", help="Create/open project, then run VSPAERO smoke analyses")
     p_smoke.add_argument("project_id")
     p_smoke.add_argument(
@@ -679,6 +698,80 @@ def main(argv: Optional[list[str]] = None) -> int:
                         },
                     )
             return 0
+
+        if args.cmd == "cache":
+            projects_root = ensure_dir(Path(args.projects_root))
+            proj = ensure_dir(projects_root / args.project_id)
+            results_root = ensure_dir(proj / "results")
+            cache_logger = cli_logger.bind(subcommand=args.cache_cmd)
+            manager = AnalysisManager(
+                vsp=object(),
+                results_root=results_root,
+                auto_init_vsp=False,
+                open_gui=False,
+            )
+            analysis_filter = list(dict.fromkeys(args.analysis)) if args.analysis else []
+            ticket_filter = list(dict.fromkeys(args.ticket)) if getattr(args, "ticket", None) else []
+
+            if args.cache_cmd == "list":
+                summaries = manager.cache_summaries(
+                    analysis_keys=analysis_filter or None,
+                    ticket_shas=ticket_filter or None,
+                    include_deferred=bool(args.include_deferred),
+                )
+                if not summaries:
+                    cache_logger.info(
+                        "No cached receipts recorded",
+                        context={
+                            "project_id": args.project_id,
+                            "analysis_keys": analysis_filter or None,
+                            "ticket_shas": ticket_filter or None,
+                            "include_deferred": bool(args.include_deferred),
+                        },
+                    )
+                    return 0
+                cache_logger.info(
+                    "Cached receipt summary",
+                    context={
+                        "project_id": args.project_id,
+                        "count": len(summaries),
+                        "analysis_keys": analysis_filter or None,
+                        "ticket_shas": ticket_filter or None,
+                        "include_deferred": bool(args.include_deferred),
+                    },
+                )
+                for summary in summaries:
+                    cache_logger.info(
+                        "Cached receipt",
+                        context={
+                            "analysis": summary["analysis"],
+                            "ticket_sha": summary["ticket_sha"],
+                            "status": summary["status"],
+                            "stored_at": summary.get("stored_at"),
+                            "run_started": summary.get("run_started"),
+                            "artifact_dir": summary.get("artifact_dir"),
+                            "dependencies": summary.get("dependencies"),
+                        },
+                    )
+                return 0
+
+            if args.cache_cmd == "clear":
+                removed = manager.clear_cache(
+                    analysis_keys=analysis_filter or None,
+                    ticket_shas=ticket_filter or None,
+                    drop_results=not args.keep_results,
+                )
+                cache_logger.info(
+                    "Cleared cached receipts",
+                    context={
+                        "project_id": args.project_id,
+                        "analysis_keys": analysis_filter or None,
+                        "ticket_shas": removed,
+                        "kept_results": bool(args.keep_results),
+                        "removed_count": len(removed),
+                    },
+                )
+                return 0
 
         if args.cmd == "results":
             projects_root = ensure_dir(Path(args.projects_root))

@@ -9,11 +9,12 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from queue import Empty, Queue
-from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple, Type
 
 from ..core.errors import AnalysisError
 from ..core.logging import get_logger
 from ..core.schema import RunManifest
+from ..io.cache_store import CacheRecord, load_cache_records, save_cache_records
 from ..io.results_index import (
     ResultIndexEntry,
     append_result_entry,
@@ -61,6 +62,7 @@ class AnalysisRegistration:
     default_dependency_keys: Set[str] = field(default_factory=set)
     description: Optional[str] = None
     uses_vsp_lock: bool = True
+    receipt_model: Optional[Type[Receipt]] = None
 
 
 @dataclass
@@ -154,6 +156,7 @@ class AnalysisManager:
         self._cache: Dict[str, Dict[str, AnalysisCacheEntry]] = {}
         self._dependency_index = DependencyIndex()
         self._vsp_versions: Dict[str, str] = {}
+        self._deferred_cache_records: Dict[str, List[CacheRecord]] = {}
 
         if vsp is None:
             ctx = init_context(open_gui=open_gui)
@@ -167,11 +170,12 @@ class AnalysisManager:
             self._vsp = vsp
             self._logger.info("Attached provided OpenVSP session")
 
+        self.register_builtin_analyses()
+
         self._results_root: Optional[Path] = None
         if results_root is not None:
             self.set_results_root(results_root)
 
-        self.register_builtin_analyses()
 
     # ------------------------------------------------------------------
     # Properties & configuration
@@ -195,7 +199,13 @@ class AnalysisManager:
     def set_results_root(self, root: Optional[Path]) -> None:
         with self._lock:
             self._results_root = Path(root).resolve() if root is not None else None
-            self._prune_stale_cache_entries()
+            self._cache.clear()
+            self._dependency_index = DependencyIndex()
+            self._deferred_cache_records.clear()
+            if self._results_root is not None:
+                stale_removed = self._load_persisted_cache_locked()
+                if stale_removed:
+                    self._persist_cache_locked()
         self._logger.info(
             "Configured results root",
             context={"results_root": str(self._results_root) if self._results_root else None},
@@ -214,11 +224,14 @@ class AnalysisManager:
         default_dependency_keys: Optional[Iterable[str]] = None,
         description: Optional[str] = None,
         uses_vsp_lock: bool = True,
+        receipt_model: Optional[Type[Receipt]] = None,
     ) -> None:
         with self._lock:
             if key in self._registry:
                 # existing registration wins
                 return
+            if receipt_model is not None and not issubclass(receipt_model, Receipt):
+                raise TypeError("receipt_model must inherit from Receipt")
             self._registry[key] = AnalysisRegistration(
                 key=key,
                 runner=runner,
@@ -227,16 +240,21 @@ class AnalysisManager:
                 default_dependency_keys=set(default_dependency_keys or set()),
                 description=description,
                 uses_vsp_lock=bool(uses_vsp_lock),
+                receipt_model=receipt_model,
             )
+            pending_records = self._deferred_cache_records.pop(key, [])
+            if pending_records and self._results_root is not None:
+                self._load_cache_records_for_analysis_locked(key, pending_records)
+                self._persist_cache_locked()
         self._logger.debug(
             "Registered analysis",
             context={
                 "analysis": key,
                 "uses_vsp_lock": uses_vsp_lock,
                 "has_materializer": materializer is not None,
+                "persistable": receipt_model is not None,
             },
         )
-
     def register_builtin_analyses(self) -> None:
         from ..vsp.analyses.compute_geometry import run_compute_geometry
         from ..vsp.analyses.parasite_drag import run_parasite_drag
@@ -247,6 +265,7 @@ class AnalysisManager:
             run_compute_geometry,
             materializer=_materialize_compute_geometry,
             default_dependency_keys={"vsp_model", "configuration"},
+            receipt_model=ComputeGeometryReceipt,
             description="Pre-compute VSPAERO geometry inputs",
         )
         self.register_analysis(
@@ -254,6 +273,7 @@ class AnalysisManager:
             run_stability,
             materializer=_materialize_stability,
             default_dependency_keys={"vsp_model", "configuration", "operating_point"},
+            receipt_model=StabilityReceipt,
             description="Run VSPAERO static stability analysis",
         )
         self.register_analysis(
@@ -261,6 +281,7 @@ class AnalysisManager:
             run_parasite_drag,
             materializer=_materialize_parasite_drag,
             default_dependency_keys={"vsp_model", "configuration", "freestream"},
+            receipt_model=ParasiteDragReceipt,
             description="Run VSPAERO parasite drag build-up",
         )
 
@@ -348,123 +369,229 @@ class AnalysisManager:
         with self._lock:
             impacted = self._dependency_index.invalidate(key_list)
             if not impacted:
-                self._logger.debug("No cache entries impacted by invalidation", context={"keys": key_list})
+                self._logger.debug(
+                    "No cache entries impacted by invalidation",
+                    context={"keys": key_list},
+                )
                 return set()
             for cache_bucket in self._cache.values():
                 for ticket_sha in list(impacted):
                     cache_bucket.pop(ticket_sha, None)
-            self._prune_stale_cache_entries()
+            for deferred in self._deferred_cache_records.values():
+                deferred[:] = [record for record in deferred if record.ticket_sha256 not in impacted]
+            empty_keys = [key for key, records in self._deferred_cache_records.items() if not records]
+            for empty_key in empty_keys:
+                self._deferred_cache_records.pop(empty_key, None)
+            self._persist_cache_locked()
+            self._prune_stale_cache_entries_locked()
         impacted_set = set(impacted)
         self._logger.info(
             "Invalidated cached receipts",
             context={"keys": key_list, "impacted": list(impacted_set)},
         )
         return impacted_set
-
     def clear_cache(
         self,
         *,
         analysis_keys: Optional[Iterable[str]] = None,
+        ticket_shas: Optional[Iterable[str]] = None,
         drop_results: bool = True,
-    ) -> None:
+    ) -> List[str]:
         """Clear cached receipts and optionally remove their artifacts."""
 
         keys_filter: Set[str] = {key for key in (analysis_keys or []) if key}
+        ticket_filter: Set[str] = {sha for sha in (ticket_shas or []) if sha}
         removed_entries: List[Tuple[str, str, AnalysisCacheEntry]] = []
 
         with self._lock:
-            if not self._cache:
+            if not self._cache and not self._deferred_cache_records:
                 self._logger.debug(
                     "Cache already empty",
-                    context={"analysis_keys": list(keys_filter) or None},
+                    context={"analysis_keys": list(keys_filter) or None, "ticket_shas": list(ticket_filter) or None},
                 )
-                return
+                return []
+            cache_changed = False
             for analysis_key, bucket in list(self._cache.items()):
                 if keys_filter and analysis_key not in keys_filter:
                     continue
                 for ticket_sha, entry in list(bucket.items()):
+                    if ticket_filter and ticket_sha not in ticket_filter:
+                        continue
                     removed_entries.append((analysis_key, ticket_sha, entry))
                     bucket.pop(ticket_sha, None)
                     self._dependency_index.clear(ticket_sha)
+                    cache_changed = True
                 if not bucket:
                     self._cache.pop(analysis_key, None)
+            if keys_filter or ticket_filter:
+                for analysis_key, records in list(self._deferred_cache_records.items()):
+                    if keys_filter and analysis_key not in keys_filter:
+                        continue
+                    if ticket_filter:
+                        remaining = [record for record in records if record.ticket_sha256 not in ticket_filter]
+                    else:
+                        remaining = []
+                    if remaining:
+                        if len(remaining) != len(records):
+                            self._deferred_cache_records[analysis_key] = remaining
+                            cache_changed = True
+                        continue
+                    self._deferred_cache_records.pop(analysis_key, None)
+                    cache_changed = True
+            else:
+                if self._deferred_cache_records:
+                    cache_changed = True
+                self._deferred_cache_records.clear()
+            if cache_changed:
+                self._persist_cache_locked()
 
         if not removed_entries:
             self._logger.debug(
                 "No cache entries matched clear request",
-                context={"analysis_keys": list(keys_filter) or None},
+                context={
+                    "analysis_keys": list(keys_filter) or None,
+                    "ticket_shas": list(ticket_filter) or None,
+                },
             )
-            return
+            return []
 
+        removed_shas = [ticket_sha for _, ticket_sha, _ in removed_entries]
         root = self._results_root
-        artifact_paths: Set[Path] = set()
-        if drop_results and root is not None:
-            root_resolved = root.resolve()
-            for _, _, entry in removed_entries:
-                artifact_dir = getattr(entry.receipt, "artifact_dir", None)
-                if not artifact_dir:
-                    continue
-                candidate = Path(artifact_dir)
-                if not candidate.is_absolute():
-                    candidate = root / candidate
-                try:
-                    candidate_resolved = candidate.resolve(strict=False)
-                except Exception:
-                    candidate_resolved = candidate
-                try:
-                    candidate_resolved.relative_to(root_resolved)
-                except ValueError:
-                    self._logger.warning(
-                        "Skipping artifact removal outside results root",
-                        context={"path": str(candidate_resolved)},
-                    )
-                    continue
-                artifact_paths.add(candidate_resolved)
+        removed_artifacts: List[str] = []
+        keys_context = list(keys_filter) or None
 
-            for path in sorted(artifact_paths, key=lambda p: len(p.parts), reverse=True):
-                try:
-                    shutil.rmtree(path)
-                    self._logger.debug(
-                        "Removed cached artifact directory",
-                        context={"path": str(path)},
+        if drop_results:
+            if root is None:
+                self._logger.warning(
+                    "drop_results requested but no results_root configured",
+                    context={"analysis_keys": keys_context, "ticket_shas": removed_shas},
+                )
+            else:
+                for analysis_key, ticket_sha, entry in removed_entries:
+                    artifact_rel = getattr(entry.receipt, "artifact_dir", None)
+                    if not artifact_rel:
+                        continue
+                    artifact_path = root / artifact_rel
+                    try:
+                        artifact_path.relative_to(root)
+                    except ValueError:
+                        self._logger.warning(
+                            "Skipping artifact outside results root",
+                            context={
+                                "analysis": analysis_key,
+                                "ticket_sha": ticket_sha,
+                                "artifact_dir": str(artifact_path),
+                            },
+                        )
+                        continue
+                    if not artifact_path.exists():
+                        continue
+                    try:
+                        shutil.rmtree(artifact_path)
+                        removed_artifacts.append(str(artifact_path.relative_to(root)))
+                    except Exception as exc:  # pragma: no cover - filesystem guard
+                        self._logger.warning(
+                            "Failed to remove cached artifact directory",
+                            context={
+                                "analysis": analysis_key,
+                                "ticket_sha": ticket_sha,
+                                "artifact_dir": str(artifact_path),
+                            },
+                            hint=str(exc),
+                        )
+                if removed_artifacts:
+                    self._logger.info(
+                        "Removed cached result artifacts",
+                        context={
+                            "analysis_keys": keys_context,
+                            "count": len(removed_artifacts),
+                        },
                     )
-                except FileNotFoundError:
-                    continue
-                except OSError as exc:
+                try:
+                    remove_result_entries(root.parent, ticket_shas=removed_shas)
+                except Exception as exc:  # pragma: no cover - filesystem guard
                     self._logger.warning(
-                        "Failed to remove cached artifact directory",
-                        context={"path": str(path)},
+                        "Failed to update results index after cache clear",
+                        context={"analysis_keys": keys_context},
                         hint=str(exc),
                     )
 
-            for path in artifact_paths:
-                parent = path.parent
-                while parent != root_resolved and parent.is_dir():
-                    try:
-                        parent.rmdir()
-                    except OSError:
-                        break
-                    parent = parent.parent
-
-        ticket_shas = [ticket_sha for _, ticket_sha, _ in removed_entries]
-        if root is not None:
-            try:
-                remove_result_entries(root.parent, ticket_shas=ticket_shas)
-            except Exception as exc:  # pragma: no cover - defensive logging
-                self._logger.warning(
-                    "Failed to update results index while clearing cache",
-                    context={"ticket_shas": ticket_shas},
-                    hint=str(exc),
-                )
-
         self._logger.info(
-            "Cleared cached analysis receipts",
+            "Cleared cached receipts",
             context={
-                "analysis_keys": list(keys_filter) or None,
-                "entries_removed": len(removed_entries),
-                "artifacts_removed": len(artifact_paths) if drop_results and root is not None else 0,
+                "analysis_keys": keys_context,
+                "ticket_shas": removed_shas,
+                "drop_results": drop_results,
             },
         )
+        return removed_shas
+
+    def cache_summaries(
+        self,
+        *,
+        analysis_keys: Optional[Iterable[str]] = None,
+        ticket_shas: Optional[Iterable[str]] = None,
+        include_deferred: bool = True,
+    ) -> List[Dict[str, Any]]:
+        """Return cache entry metadata for introspection."""
+
+        keys_filter: Set[str] = {key for key in (analysis_keys or []) if key}
+        ticket_filter: Set[str] = {sha for sha in (ticket_shas or []) if sha}
+        summaries: List[Dict[str, Any]] = []
+
+        with self._lock:
+            for analysis_key, bucket in self._cache.items():
+                if keys_filter and analysis_key not in keys_filter:
+                    continue
+                registration = self._registry.get(analysis_key)
+                description = registration.description if registration else None
+                for ticket_sha, entry in bucket.items():
+                    if ticket_filter and ticket_sha not in ticket_filter:
+                        continue
+                    if self._results_root is not None and not self._receipt_is_valid(entry):
+                        continue
+                    receipt = entry.receipt
+                    manifest = getattr(receipt, "run_manifest", None)
+                    summaries.append(
+                        {
+                            "analysis": analysis_key,
+                            "status": "available",
+                            "ticket_sha": ticket_sha,
+                            "stored_at": entry.stored_at.isoformat(),
+                            "artifact_dir": getattr(receipt, "artifact_dir", None),
+                            "dependencies": sorted(entry.dependency_keys),
+                            "receipt_model": f"{receipt.__class__.__module__}.{receipt.__class__.__qualname__}",
+                            "analysis_description": description,
+                            "run_started": manifest.started_utc if manifest else None,
+                        }
+                    )
+            if include_deferred:
+                for analysis_key, records in self._deferred_cache_records.items():
+                    if keys_filter and analysis_key not in keys_filter:
+                        continue
+                    registration = self._registry.get(analysis_key)
+                    description = registration.description if registration else None
+                    for record in records:
+                        if ticket_filter and record.ticket_sha256 not in ticket_filter:
+                            continue
+                        receipt_data = record.receipt or {}
+                        manifest_data = receipt_data.get("run_manifest") or {}
+                        summaries.append(
+                            {
+                                "analysis": analysis_key,
+                                "status": "deferred",
+                                "ticket_sha": record.ticket_sha256,
+                                "stored_at": record.stored_at,
+                                "artifact_dir": receipt_data.get("artifact_dir"),
+                                "dependencies": sorted(record.dependency_keys),
+                                "receipt_model": record.receipt_model,
+                                "analysis_description": description,
+                                "run_started": manifest_data.get("started_utc"),
+                            }
+                        )
+
+        summaries.sort(key=lambda item: (item["analysis"], item.get("stored_at") or "", item["ticket_sha"]))
+        return summaries
 
     def cache_entry(self, analysis_key: str, ticket_sha: str) -> Optional[AnalysisCacheEntry]:
         with self._lock:
@@ -578,6 +705,7 @@ class AnalysisManager:
             cache_bucket = self._cache.setdefault(job.analysis_key, {})
             cache_bucket[ticket_sha] = entry
             self._dependency_index.record(ticket_sha, deps)
+            self._persist_cache_locked()
         self._prune_stale_cache_entries()
         self._logger.info(
             "Analysis job completed",
@@ -619,18 +747,25 @@ class AnalysisManager:
         return not unresolved
 
     def _prune_stale_cache_entries(self) -> None:
-        root = self._results_root
         with self._lock:
-            if not self._cache:
-                return
-            for analysis_key, bucket in list(self._cache.items()):
-                for ticket_sha, entry in list(bucket.items()):
-                    if root is None or not self._receipt_is_valid(entry):
-                        bucket.pop(ticket_sha, None)
-                        self._dependency_index.clear(ticket_sha)
-                if not bucket:
-                    self._cache.pop(analysis_key, None)
+            self._prune_stale_cache_entries_locked()
 
+    def _prune_stale_cache_entries_locked(self) -> None:
+        root = self._results_root
+        if not self._cache:
+            return
+        updated = False
+        for analysis_key, bucket in list(self._cache.items()):
+            for ticket_sha, entry in list(bucket.items()):
+                if root is None or not self._receipt_is_valid(entry):
+                    bucket.pop(ticket_sha, None)
+                    self._dependency_index.clear(ticket_sha)
+                    updated = True
+            if not bucket:
+                self._cache.pop(analysis_key, None)
+                updated = True
+        if updated:
+            self._persist_cache_locked()
     def _receipt_is_valid(self, entry: AnalysisCacheEntry) -> bool:
         root = self._results_root
         if root is None:
@@ -651,6 +786,88 @@ class AnalysisManager:
         inputs_sha = manifest_data.get("inputs_sha256")
         return not inputs_sha or inputs_sha == entry.ticket_sha
 
+    def _load_persisted_cache_locked(self) -> bool:
+        if self._results_root is None:
+            return False
+        cache_records = load_cache_records(self._results_root)
+        if not cache_records:
+            return False
+        stale = False
+        for record in cache_records:
+            registration = self._registry.get(record.analysis)
+            if registration is None or registration.receipt_model is None:
+                self._deferred_cache_records.setdefault(record.analysis, []).append(record)
+                continue
+            if self._load_cache_records_for_analysis_locked(record.analysis, [record]):
+                stale = True
+        return stale
+
+    def _load_cache_records_for_analysis_locked(
+        self, analysis_key: str, records: Iterable[CacheRecord]
+    ) -> bool:
+        registration = self._registry.get(analysis_key)
+        if registration is None or registration.receipt_model is None:
+            return False
+        if self._results_root is None:
+            return False
+        stale = False
+        for record in records:
+            try:
+                receipt = registration.receipt_model.model_validate(record.receipt)
+            except Exception as exc:
+                self._logger.warning(
+                    "Failed to restore cached receipt",
+                    context={
+                        "analysis": analysis_key,
+                        "ticket_sha": record.ticket_sha256,
+                    },
+                    hint=str(exc),
+                )
+                stale = True
+                continue
+            try:
+                stored_at = datetime.fromisoformat(record.stored_at)
+            except Exception:
+                stored_at = datetime.utcnow()
+            entry = AnalysisCacheEntry(
+                ticket_sha=record.ticket_sha256,
+                receipt=receipt,
+                stored_at=stored_at,
+                dependency_keys=set(record.dependency_keys),
+            )
+            if not self._receipt_is_valid(entry):
+                stale = True
+                continue
+            cache_bucket = self._cache.setdefault(analysis_key, {})
+            cache_bucket[record.ticket_sha256] = entry
+            self._dependency_index.record(record.ticket_sha256, entry.dependency_keys)
+        return stale
+
+    def _persist_cache_locked(self) -> None:
+        if self._results_root is None:
+            return
+        records: List[CacheRecord] = []
+        for analysis_key, bucket in self._cache.items():
+            registration = self._registry.get(analysis_key)
+            if registration is None or registration.receipt_model is None:
+                continue
+            receipt_model = registration.receipt_model
+            receipt_type = f"{receipt_model.__module__}.{receipt_model.__qualname__}"
+            for ticket_sha, entry in bucket.items():
+                records.append(
+                    CacheRecord(
+                        analysis=analysis_key,
+                        ticket_sha256=ticket_sha,
+                        stored_at=entry.stored_at.isoformat(),
+                        dependency_keys=sorted(entry.dependency_keys),
+                        receipt=entry.receipt.model_dump(mode="json"),
+                        receipt_model=receipt_type,
+                    )
+                )
+        for analysis_key, pending in self._deferred_cache_records.items():
+            records.extend(pending)
+        records.sort(key=lambda rec: (rec.analysis, rec.stored_at, rec.ticket_sha256))
+        save_cache_records(self._results_root, records)
     @contextmanager
     def vsp_guard(self):
         self._vsp_lock.acquire()
