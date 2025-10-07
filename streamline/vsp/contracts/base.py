@@ -1,4 +1,4 @@
-﻿# streamline/vsp/contracts/base.py
+# streamline/vsp/contracts/base.py
 from __future__ import annotations
 
 import hashlib
