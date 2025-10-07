@@ -23,6 +23,7 @@ from ..io.results_index import (
 )
 from ..vsp.contracts.base import Receipt, Ticket
 from ..vsp.contracts.compute_geometry import ComputeGeometryReceipt
+from ..vsp.contracts.comp_geom import CompGeomReceipt
 from ..vsp.contracts.parasite_drag import ParasiteDragReceipt
 from ..vsp.contracts.stability import StabilityReceipt
 from ..vsp.run_utils import dump_json, prepare_results_dir, relativize
@@ -251,6 +252,10 @@ class AnalysisManager:
             run_compute_geometry,
             _materialize_compute_geometry,
         )
+        from ..vsp.analyses.comp_geom import (
+            run_comp_geom,
+            _materialize_comp_geom,
+        )
         from ..vsp.analyses.parasite_drag import (
             run_parasite_drag,
             _materialize_parasite_drag,
@@ -267,6 +272,14 @@ class AnalysisManager:
             default_dependency_keys={"vsp_model", "configuration"},
             receipt_model=ComputeGeometryReceipt,
             description="Pre-compute VSPAERO geometry inputs",
+        )
+        self.register_analysis(
+            "comp_geom",
+            run_comp_geom,
+            materializer=_materialize_comp_geom,
+            default_dependency_keys={"vsp_model", "configuration"},
+            receipt_model=CompGeomReceipt,
+            description="Run OpenVSP CompGeom surface intersection analysis",
         )
         self.register_analysis(
             "vspaero_stability",
