@@ -3,3 +3,4 @@ projects/*
 *.pyc
 .DS_Store
 *.vsptime
+OpenVSP-*/** */
