@@ -9,7 +9,6 @@ from typing import Dict, Optional, TYPE_CHECKING
 from ...core.schema import Configuration, RunManifest
 from ...io.results_index import ResultIndexEntry, append_result_entry
 from ..configure import AppliedConfiguration, apply_configuration
-from ..sets import choose_populated_set
 from ..util import as_list, apply_udp_overrides
 from ..contracts.compute_geometry import (
     ComputeGeometryTicket,
@@ -17,58 +16,10 @@ from ..contracts.compute_geometry import (
     ComputeGeometryReceipt,
 )
 from ..run_utils import dump_json, prepare_results_dir, relativize
+from ._set_utils import resolve_set_index, resolve_set_name
 
 if TYPE_CHECKING:
     from ...analysis.manager import AnalysisJob, AnalysisManager
-
-
-def _resolve_set_index(
-    vsp,
-    ticket: ComputeGeometryTicket,
-    applied_cfg: Optional[AppliedConfiguration],
-) -> Optional[int]:
-    if ticket.set_index is not None:
-        return int(ticket.set_index)
-    if applied_cfg and applied_cfg.geom_set_index is not None:
-        return int(applied_cfg.geom_set_index)
-
-    candidates = []
-    if ticket.set_name:
-        candidates.append(ticket.set_name)
-    if applied_cfg and applied_cfg.geom_set_name:
-        candidates.append(applied_cfg.geom_set_name)
-
-    try:
-        mapping = {i: vsp.GetSetName(i) for i in range(vsp.GetNumSets())}
-    except Exception:
-        mapping = {}
-
-    for candidate in candidates:
-        if not candidate:
-            continue
-        for idx, name in mapping.items():
-            if name and name.lower() == candidate.lower():
-                return idx
-
-    try:
-        return choose_populated_set(vsp)
-    except Exception:
-        return None
-
-
-def _resolve_set_name(
-    vsp,
-    set_idx: Optional[int],
-    applied_cfg: Optional[AppliedConfiguration],
-) -> Optional[str]:
-    if set_idx is None:
-        return applied_cfg.geom_set_name if applied_cfg else None
-    if applied_cfg and applied_cfg.geom_set_index == set_idx and applied_cfg.geom_set_name:
-        return applied_cfg.geom_set_name
-    try:
-        return vsp.GetSetName(int(set_idx))
-    except Exception:
-        return applied_cfg.geom_set_name if applied_cfg else None
 
 
 def run_compute_geometry(
@@ -91,8 +42,8 @@ def run_compute_geometry(
         else (applied_cfg.use_mode_flag if applied_cfg and applied_cfg.use_mode_flag is not None else None)
     )
 
-    set_idx = _resolve_set_index(vsp, ticket, applied_cfg)
-    set_name = _resolve_set_name(vsp, set_idx, applied_cfg)
+    set_idx = resolve_set_index(vsp, ticket, applied_cfg)
+    set_name = resolve_set_name(vsp, set_idx, applied_cfg)
 
     analysis = "VSPAEROComputeGeometry"
     vsp.SetAnalysisInputDefaults(analysis)
