@@ -159,7 +159,7 @@ print("OpenVSP:", openvsp.VSPVersion())
 print("Pandas:", pandas.__version__)
 '@
   $tmp = New-TemporaryFile
-  Set-Content -Path $tmp -Value $code -Encoding UTF8
+  Set-Content -Path $tmp -Value $code -Encoding UTF8NoBOM
   conda run -n $name python $tmp
   $ec = $LASTEXITCODE
   Remove-Item $tmp -Force
