@@ -7,28 +7,60 @@ on:
 
 jobs:
   tests:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+
     steps:
       - uses: actions/checkout@v4
-
-      - name: Configure OpenVSP environment
-        shell: pwsh
-        run: |
-          $root = "${{ github.workspace }}\OpenVSP-3.42.3-win64"
-          echo "OPENVSP_ROOT=$root" >> $env:GITHUB_ENV
-          echo "PYTHONPATH=${{ github.workspace }};$root\python" >> $env:GITHUB_ENV
-          echo "PATH=$root;$root\python;$root\scripts;$root\vspaero_ex;$env:PATH" >> $env:GITHUB_ENV
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
+
+      - name: Restore OpenVSP cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/openvsp
+          key: openvsp-${{ runner.os }}-${{ hashFiles('tools/openvsp.json') }}
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pytest
+
+      - name: Install OpenVSP runtime
+        run: |
+          python -m tools.install_openvsp --print-json > openvsp_install.json
+          python - <<'PY'
+import json
+import os
+from pathlib import Path
+
+manifest = json.loads(Path("openvsp_install.json").read_text())
+
+env_lines = []
+for key in ("OPENVSP_HOME", "STREAMLINE_OPENVSP_HOME"):
+    env_lines.append(f"{key}={manifest['install_root']}")
+version = manifest.get("version")
+if version:
+    env_lines.append(f"OPENVSP_VERSION={version}")
+    env_lines.append(f"STREAMLINE_OPENVSP_VERSION={version}")
+for key, values in manifest.get("library_paths", {}).items():
+    if values:
+        env_lines.append(f"{key}={os.pathsep.join(values)}")
+with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as handle:
+    for line in env_lines:
+        handle.write(line + "\n")
+with Path(os.environ["GITHUB_PATH"]).open("a", encoding="utf-8") as handle:
+    for entry in manifest.get("path_entries", []):
+        handle.write(entry + "\n")
+PY
 
       - name: Run tests
         run: pytest

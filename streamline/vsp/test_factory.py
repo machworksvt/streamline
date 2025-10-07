@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 import types
 from pathlib import Path
@@ -8,7 +9,12 @@ from typing import Any, Dict, Optional
 from ..core.logging import get_logger
 
 
+_ALLOW_STUB = os.getenv("STREAMLINE_ALLOW_VSP_STUB", "").lower() in {"1", "true", "yes", "on"}
+
+
 class _FakeOpenVSP:
+    __streamline_is_stub__ = True
+    is_streamline_stub = True
     def __init__(self) -> None:
         self.ClearVSPModel()
 
@@ -53,6 +59,9 @@ class _FakeOpenVSP:
     def GetParmVal(self, geom_id: str, parm: str, _group: str) -> float:
         return float(self._geom[geom_id]["params"].get(parm, 0.0))
 
+    def VSPVersion(self) -> str:
+        return "stub"
+
 
 _FAKE_VSP = _FakeOpenVSP()
 
@@ -71,18 +80,23 @@ def import_openvsp() -> Optional[Any]:
     try:
         import openvsp as vsp  # type: ignore
         if hasattr(vsp, "ClearVSPModel"):
+            setattr(vsp, "__streamline_is_stub__", False)
             return vsp
-    except ModuleNotFoundError:
+    except Exception:
         vsp = None
 
     if vsp is None:
         try:
             import openvsp.openvsp as vsp  # type: ignore
-        except ModuleNotFoundError:
+        except Exception:
             vsp = None
 
     if vsp is not None and hasattr(vsp, "ClearVSPModel"):
+        setattr(vsp, "__streamline_is_stub__", False)
         return vsp
+
+    if not _ALLOW_STUB:
+        raise RuntimeError("OpenVSP Python module is not available and stubs are disabled. Set STREAMLINE_ALLOW_VSP_STUB=1 to allow fallbacks.")
 
     return _FAKE_VSP
 
