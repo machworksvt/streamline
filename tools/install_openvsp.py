@@ -33,6 +33,7 @@ class PlatformSpec:
     python_subdir: str
     library_subdirs: List[str]
     sha256: Optional[str]
+    python_versions: Optional[List[str]]
 
     @classmethod
     def from_dict(cls, key: str, data: Dict[str, object]) -> "PlatformSpec":
@@ -44,6 +45,7 @@ class PlatformSpec:
             python_subdir=str(data.get("python_subdir", "python")),
             library_subdirs=[str(item) for item in data.get("library_subdirs", [])],
             sha256=str(data["sha256"]) if data.get("sha256") else None,
+            python_versions=[str(item) for item in data.get("python_versions", [])] or None,
         )
 
 
@@ -162,6 +164,20 @@ def install_runtime(
         raise RuntimeError(f"Platform '{platform_key}' is not defined in metadata")
 
     platform_spec = PlatformSpec.from_dict(platform_key, platforms[platform_key])
+
+    interpreter_version = f"{sys.version_info.major}.{sys.version_info.minor}"
+    if platform_spec.python_versions and interpreter_version not in platform_spec.python_versions:
+        supported = ", ".join(sorted(platform_spec.python_versions))
+        raise RuntimeError(
+            "The selected OpenVSP distribution targets Python {supported}, but the current interpreter is Python {interpreter_version}. "
+            "Create or activate a Python {supported} environment (e.g. 'conda create -n streamline python={first}') before running the installer again, or "
+            "override the metadata with a build that matches this interpreter."
+            .format(
+                supported=supported,
+                interpreter_version=interpreter_version,
+                first=platform_spec.python_versions[0],
+            )
+        )
 
     install_root = cache_root / version / platform_key
     marker_path = install_root / INSTALL_MARKER

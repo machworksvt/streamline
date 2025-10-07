@@ -9,6 +9,7 @@
       "archive_subdir": "OpenVSP-3.46.0-win64",
       "python_subdir": "python",
       "library_subdirs": ["", "bin", "vspaero_ex"],
+      "python_versions": ["3.11"],
       "sha256": null
     },
     "linux": {
@@ -17,6 +18,7 @@
       "archive_subdir": "OpenVSP-3.46.0-Ubuntu22.04",
       "python_subdir": "python",
       "library_subdirs": ["bin", "vspaero_ex", "lib"],
+      "python_versions": ["3.11"],
       "sha256": null
     },
     "macos": {
@@ -25,6 +27,7 @@
       "archive_subdir": "OpenVSP-3.46.0-macOS",
       "python_subdir": "python",
       "library_subdirs": ["", "bin"],
+      "python_versions": ["3.11"],
       "sha256": null
     }
   }

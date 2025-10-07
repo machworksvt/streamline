@@ -40,6 +40,25 @@ The installer will:
 * Drop an `openvsp-runtime.pth` file into the active environment so `import openvsp` works without tweaking `PYTHONPATH`.
 * Cache the extracted payload, so subsequent executions reuse the existing runtime unless you pass `--force`.
 
+> **Python version compatibility**
+>
+> The upstream OpenVSP project currently publishes Python bindings built for **Python 3.11** across Windows, Linux, and macOS. The installer now refuses to run under interpreters with a different major/minor version (for example Python 3.12) because the native modules cannot be imported there. If you are using Conda or `pyenv`, create a Python 3.11 environment before invoking the installer:
+>
+> ```powershell
+> conda create -n streamline python=3.11
+> conda activate streamline
+> python -m tools.install_openvsp
+> ```
+>
+> or, with `pyenv`/virtualenv:
+>
+> ```bash
+> pyenv install 3.11.9
+> pyenv virtualenv 3.11.9 streamline
+> pyenv activate streamline
+> python -m tools.install_openvsp
+> ```
+
 > **Conda environments and the user site**
 >
 > Conda disables the "user site-packages" directory by default (it sets `PYTHONNOUSERSITE=1`). If the installer cannot write the `.pth` file into the environment because it is read-only, it falls back to the user site and will now refuse to continue when the interpreter ignores that location. It is safe to enable the user site for a Conda environment; run `conda env config vars set PYTHONNOUSERSITE=0` (or unset the variable in your shell) and reactivate the environment before re-running the installer. No other Conda setup changes are required.

@@ -74,6 +74,7 @@ class _FakeOpenVSP:
 
 
 _FAKE_VSP = _FakeOpenVSP()
+_FAKE_VSP.__streamline_stub_reason__ = "not attempted"
 
 
 def import_openvsp() -> Optional[Any]:
@@ -87,27 +88,41 @@ def import_openvsp() -> Optional[Any]:
         config._IGNORE_IMPORTS = False
         sys.modules["openvsp_config"] = config
 
+    last_error: Optional[str] = None
+
     try:
         import openvsp as vsp  # type: ignore
         if hasattr(vsp, "ClearVSPModel"):
             setattr(vsp, "__streamline_is_stub__", False)
+            setattr(vsp, "__streamline_stub_reason__", None)
             return vsp
-    except Exception:
+    except Exception as exc:  # noqa: BLE001
+        last_error = f"openvsp: {exc}"
         vsp = None
 
     if vsp is None:
         try:
             import openvsp.openvsp as vsp  # type: ignore
-        except Exception:
+        except Exception as exc:  # noqa: BLE001
+            if last_error is None:
+                last_error = f"openvsp.openvsp: {exc}"
             vsp = None
 
     if vsp is not None and hasattr(vsp, "ClearVSPModel"):
         setattr(vsp, "__streamline_is_stub__", False)
+        setattr(vsp, "__streamline_stub_reason__", None)
         return vsp
 
     if not _ALLOW_STUB:
-        raise RuntimeError("OpenVSP Python module is not available and stubs are disabled. Set STREAMLINE_ALLOW_VSP_STUB=1 to allow fallbacks.")
+        message = "OpenVSP Python module is not available and stubs are disabled. Set STREAMLINE_ALLOW_VSP_STUB=1 to allow fallbacks."
+        if last_error:
+            message = f"{message} (last error: {last_error})"
+        raise RuntimeError(message)
 
+    if last_error:
+        setattr(_FAKE_VSP, "__streamline_stub_reason__", last_error)
+    else:
+        setattr(_FAKE_VSP, "__streamline_stub_reason__", "unknown")
     return _FAKE_VSP
 
 
