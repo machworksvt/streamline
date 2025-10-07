@@ -65,6 +65,47 @@ function Create-Or-Update-Env([string]$name, [switch]$force) {
   Write-OK "Environment ready: $name"
 }
 
+function Get-RequiredPythonVersions() {
+  $metaPath = "./tools/openvsp.json"
+  if (-not (Test-Path $metaPath)) { return @() }
+
+  try {
+    $meta = Get-Content $metaPath -Raw | ConvertFrom-Json
+  } catch {
+    Write-Warn "Unable to parse tools/openvsp.json; skipping Python version validation."
+    return @()
+  }
+
+  $platform = "windows"
+  if (-not $meta.platforms -or -not $meta.platforms.$platform) { return @() }
+
+  $versions = $meta.platforms.$platform.python_versions
+  if (-not $versions) { return @() }
+
+  return @($versions)
+}
+
+function Assert-PythonVersion([string]$name) {
+  $required = Get-RequiredPythonVersions
+  if (-not $required -or $required.Count -eq 0) {
+    Write-Warn "No OpenVSP Python version metadata found; skipping interpreter check."
+    return
+  }
+
+  $expected = ($required -join ", ")
+  $result = conda run -n $name python -c "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')"
+  if ($LASTEXITCODE -ne 0) { Fail "Failed querying Python version for environment '$name'." }
+
+  $actual = ($result | Select-Object -First 1).Trim()
+  if (-not $required.Contains($actual)) {
+    $msg = "Environment '$name' is using Python $actual but OpenVSP requires Python $expected. " +
+           "Recreate the environment with -Force or ensure environment.yml pins the supported version."
+    Fail $msg
+  }
+
+  Write-OK "Python $actual satisfies OpenVSP requirement ($expected)."
+}
+
 function Install-PipDeps([string]$name) {
   if ($SkipPip) { Write-Warn "Skipping pip installs per -SkipPip"; return }
   if (-not (Test-Path "./requirements.txt")) { Write-Warn "requirements.txt not found (skipping)."; return }
@@ -129,6 +170,7 @@ print("Pandas:", pandas.__version__)
 Write-Section "Streamline environment setup"
 Ensure-Conda
 Create-Or-Update-Env -name $EnvName -force:$Force
+Assert-PythonVersion -name $EnvName
 Install-PipDeps -name $EnvName
 Install-OpenVSP -name $EnvName
 Validate-Imports -name $EnvName
