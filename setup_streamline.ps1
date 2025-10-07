@@ -51,8 +51,8 @@ function Confirm-YesNo($prompt) { (Read-Host "$prompt (y/n)") -match '^(y|Y)$' }
 function Find-OpenVSPFolder() {
   if ($OpenVSPDir -and (Test-Path $OpenVSPDir)) { return (Resolve-Path $OpenVSPDir).Path }
   $candidates = @(
-    ".\OpenVSP-3.42.3-win64",
-    ".\OpenVSP-3.42.3",
+    ".\OpenVSP-3.46.0-win64",
+    ".\OpenVSP-3.46.0",
     ".\v3.42.3",
     ".\OpenVSP",
     ".\openvsp"
