@@ -224,9 +224,11 @@ def install_runtime(
     if create_pth:
         pth_written = False
         candidate_dirs: List[Path] = []
+        used_user_site = False
 
         if site_packages_dir:
             candidate_dirs.append(site_packages_dir)
+            user_site = None
         else:
             # Prefer the active environment's purelib first, but gracefully fall back to
             # the user site-packages directory when the environment is not writable
@@ -248,6 +250,8 @@ def install_runtime(
                 pth_path = site_dir / PTH_FILENAME
                 with pth_path.open("w", encoding="utf-8") as handle:
                     handle.write(str(python_dir.resolve()) + os.linesep)
+                if user_site and site_dir == user_site:
+                    used_user_site = True
                 pth_written = True
                 break
             except PermissionError as exc:
@@ -258,6 +262,14 @@ def install_runtime(
             raise RuntimeError(
                 "Unable to write OpenVSP .pth file into any site-packages directory",
                 {"directories": [str(p) for p in candidate_dirs], "error": str(last_error) if last_error else None},
+            )
+
+        if used_user_site and not site.ENABLE_USER_SITE:
+            raise RuntimeError(
+                "OpenVSP bindings were exposed via the per-user site-packages directory, but the current interpreter disallows "
+                "user site-packages (site.ENABLE_USER_SITE is False). Enable the user site (e.g. unset PYTHONNOUSERSITE or run "
+                "'conda env config vars set PYTHONNOUSERSITE=0' for this environment) or rerun the installer with --site-"
+                "packages pointing to a writable environment directory.",
             )
 
     return build_result(

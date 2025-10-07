@@ -40,6 +40,10 @@ The installer will:
 * Drop an `openvsp-runtime.pth` file into the active environment so `import openvsp` works without tweaking `PYTHONPATH`.
 * Cache the extracted payload, so subsequent executions reuse the existing runtime unless you pass `--force`.
 
+> **Conda environments and the user site**
+>
+> Conda disables the "user site-packages" directory by default (it sets `PYTHONNOUSERSITE=1`). If the installer cannot write the `.pth` file into the environment because it is read-only, it falls back to the user site and will now refuse to continue when the interpreter ignores that location. It is safe to enable the user site for a Conda environment; run `conda env config vars set PYTHONNOUSERSITE=0` (or unset the variable in your shell) and reactivate the environment before re-running the installer. No other Conda setup changes are required.
+
 On success it prints the installation path and any directories that should be added to your `PATH`/`LD_LIBRARY_PATH`. In CI you can capture this information with `--print-json`:
 
 ```bash
