@@ -51,8 +51,8 @@ function Confirm-YesNo($prompt) { (Read-Host "$prompt (y/n)") -match '^(y|Y)$' }
 function Find-OpenVSPFolder() {
   if ($OpenVSPDir -and (Test-Path $OpenVSPDir)) { return (Resolve-Path $OpenVSPDir).Path }
   $candidates = @(
-    ".\OpenVSP-3.42.3-win64",
-    ".\OpenVSP-3.42.3",
+    ".\OpenVSP-3.46.0-win64",
+    ".\OpenVSP-3.46.0",
     ".\v3.42.3",
     ".\OpenVSP",
     ".\openvsp"
@@ -184,6 +184,32 @@ except Exception as e:
 # ---------------- Main ----------------
 Write-Section "Streamline environment setup"
 Test-Conda
+
+# download OpenVSP 3.46.0 from link
+# link is: https://openvsp.org/download.php?file=zips/current/windows/OpenVSP-3.46.0-win64-Python3.11.zip
+
+# download and unzip to current folder
+Write-Section "Downloading and extracting OpenVSP 3.46.0"
+
+# Define the download URL and target zip file
+$vspUrl = "https://openvsp.org/download.php?file=zips/current/windows/OpenVSP-3.46.0-win64-Python3.11.zip"
+$zipFile = ".\OpenVSP-3.46.0-win64-Python3.11.zip"
+
+# Download the file
+Write-Host "Downloading OpenVSP from $vspUrl..."
+Invoke-WebRequest -Uri $vspUrl -OutFile $zipFile
+if ($LASTEXITCODE -ne 0) { Fail "Failed to download OpenVSP." }
+Write-OK "Downloaded OpenVSP to $zipFile."
+
+# Unzip the file
+Write-Host "Extracting $zipFile..."
+Expand-Archive -Path $zipFile -DestinationPath "." -Force
+if ($LASTEXITCODE -ne 0) { Fail "Failed to extract OpenVSP." }
+Write-OK "Extracted OpenVSP."
+
+# Clean up the zip file
+Remove-Item $zipFile -Force
+Write-OK "Removed $zipFile."
 
 $vspHome = Find-OpenVSPFolder
 Write-OK "Found OpenVSP at: $vspHome"
