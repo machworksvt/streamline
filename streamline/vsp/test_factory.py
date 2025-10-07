@@ -10,6 +10,7 @@ from ..core.logging import get_logger
 
 class _FakeOpenVSP:
     def __init__(self) -> None:
+        self.__fake_vsp__ = True
         self.ClearVSPModel()
 
     def ClearVSPModel(self) -> None:
@@ -71,17 +72,19 @@ def import_openvsp() -> Optional[Any]:
     try:
         import openvsp as vsp  # type: ignore
         if hasattr(vsp, "ClearVSPModel"):
+            setattr(vsp, "__fake_vsp__", False)
             return vsp
-    except ModuleNotFoundError:
+    except (ModuleNotFoundError, ImportError):
         vsp = None
 
     if vsp is None:
         try:
             import openvsp.openvsp as vsp  # type: ignore
-        except ModuleNotFoundError:
+        except (ModuleNotFoundError, ImportError):
             vsp = None
 
     if vsp is not None and hasattr(vsp, "ClearVSPModel"):
+        setattr(vsp, "__fake_vsp__", False)
         return vsp
 
     return _FAKE_VSP
