@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import uuid
+from types import SimpleNamespace
 
 import pytest
 
@@ -36,3 +38,23 @@ def real_openvsp():
         _skip_or_fail(f"OpenVSP module present but incomplete (missing: {', '.join(missing)})")
 
     return vsp_module
+
+
+@pytest.fixture()
+def wing_model(real_openvsp):
+    vsp = real_openvsp
+    vsp.ClearVSPModel()
+    wing_id = vsp.AddGeom("WING")
+    wing_name = f"streamline_ci_wing_{uuid.uuid4().hex[:8]}"
+    vsp.SetGeomName(wing_id, wing_name)
+    vsp.Update()
+
+    context = SimpleNamespace(vsp=vsp, wing_id=wing_id, wing_name=wing_name)
+
+    try:
+        yield context
+    finally:
+        try:
+            vsp.ClearVSPModel()
+        except Exception:
+            pass
