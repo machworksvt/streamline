@@ -2,36 +2,78 @@ name: tests
 
 on:
   push:
+    branches: [ "**" ]
   pull_request:
+    branches: [ "**" ]
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash -l {0}
 
 jobs:
   test:
     strategy:
+      fail-fast: false
       matrix:
         os: [windows-latest]
         python: ["3.11"]
     runs-on: ${{ matrix.os }}
     env:
       STREAMLINE_ALLOW_VSP_STUB: "0"
-      STREAMLINE_DEBUG_VSP: "1"
+      STREAMLINE_DEBUG_VSP: "0"
     steps:
-      - uses: actions/checkout@v4
-      - uses: conda-incubator/setup-miniconda@v3
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache OpenVSP downloads
+        uses: actions/cache@v4
         with:
-            activate-environment: streamline
-            python-version: ${{ matrix.python }}
-            auto-activate-base: false
-      - name: Bootstrap
-        shell: bash
+          path: |
+            ~/.cache/openvsp/downloads
+          key: openvsp-downloads-${{ runner.os }}-${{ hashFiles('tools/openvsp.json') }}
+
+      - name: Setup Conda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          environment-file: environment.yml
+          activate-environment: streamline
+          python-version: ${{ matrix.python }}
+          auto-activate-base: false
+          use-mamba: true
+          miniforge-version: latest
+
+      - name: Show Conda info
+        run: |
+          conda info
+          conda list
+
+      - name: Install project (editable) + test deps
         run: |
           python -m pip install --upgrade pip
-          # If you have a fast path (skip ps1), else use powershell command via bash:
+          python -m pip install -e .
+          python -m pip install pytest
+
+      - name: Bootstrap OpenVSP runtime
+        run: |
           pwsh -File setup_streamline.ps1 -Force
-      - name: Show env vars
-        run: python - <<'PY'
+
+      - name: Display OpenVSP env vars
+        run: |
+          python - <<'PY'
 import os
-for k in sorted([k for k in os.environ if k.startswith("OPENVSP") or k.startswith("STREAMLINE_")]):
-    print(k,"=",os.environ[k])
+for k in sorted([k for k in os.environ if k.startswith(('OPENVSP','STREAMLINE_'))]):
+    print(k,'=',os.environ[k])
 PY
+
       - name: Run tests
-        run: pytest -vv
+        run: |
+          python -c "import sys; print('Python', sys.version)"
+          pytest -vv --maxfail=1
+
+      - name: Upload pytest results (always)
+        if: always()
+        run: |
+          echo "(Placeholder for future artifact upload)"
