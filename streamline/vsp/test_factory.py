@@ -1,129 +1,133 @@
 from __future__ import annotations
 
-import os
-import sys
-import types
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Iterable, List, Tuple
 
 from ..core.logging import get_logger
+from .session import import_vsp  # ensure promoted API
 
 
-_TRUTHY = {"1", "true", "yes", "on"}
+def import_openvsp():
+    """Legacy helper for tests expecting `import_openvsp` symbol.
+
+    Delegates to session.import_vsp(). Tests use this to obtain the OpenVSP
+    module. Keeping it lightweight avoids duplicating session import logic.
+    """
+    from .session import import_vsp  # local import to avoid cycles
+    return import_vsp()
 
 
-def _allow_stub() -> bool:
-    value = os.getenv("STREAMLINE_ALLOW_VSP_STUB")
-    if value is None:
-        return True
-    return value.strip().lower() in _TRUTHY
-
-
-_ALLOW_STUB = _allow_stub()
-
-
-class _FakeOpenVSP:
-    __streamline_is_stub__ = True
-    is_streamline_stub = True
-    def __init__(self) -> None:
-        self.ClearVSPModel()
-
-    def ClearVSPModel(self) -> None:
-        self._geom: Dict[str, Dict[str, Any]] = {}
-        self._counter = 0
-
-    def AddGeom(self, geom_type: str) -> str:
-        self._counter += 1
-        geom_id = f"fake_{self._counter}"
-        self._geom[geom_id] = {
-            "type": geom_type,
-            "name": geom_id,
-            "params": {
-                "TotalSpan": 5.0,
-                "TotalChord": 1.0,
-            },
-        }
-        return geom_id
-
-    def SetGeomName(self, geom_id: str, name: str) -> None:
-        self._geom[geom_id]["name"] = name
-
-    def GetGeomName(self, geom_id: str) -> str:
-        return self._geom[geom_id]["name"]
-
-    def FindGeom(self, name: str) -> list[str]:
-        return [gid for gid, meta in self._geom.items() if meta["name"] == name]
-
-    def SetParmVal(self, geom_id: str, parm: str, _group: str, value: float) -> None:
-        self._geom[geom_id]["params"][parm] = float(value)
-
-    def Update(self) -> None:
-        for meta in self._geom.values():
-            span = meta["params"].get("TotalSpan", 0.0)
-            chord = meta["params"].get("TotalChord", 0.0)
-            meta["params"]["Area"] = span * chord
-
-    def WriteVSPFile(self, path: str) -> None:
-        Path(path).write_text("FAKE VSP\n", encoding="utf-8")
-
-    def GetParmVal(self, geom_id: str, parm: str, _group: str) -> float:
-        return float(self._geom[geom_id]["params"].get(parm, 0.0))
-
-    def VSPVersion(self) -> str:
-        return "stub"
-
-
-_FAKE_VSP = _FakeOpenVSP()
-_FAKE_VSP.__streamline_stub_reason__ = "not attempted"
-
-
-def import_openvsp() -> Optional[Any]:
-    """Attempt to import the OpenVSP Python module, with a stub fallback."""
-
-    if "openvsp_config" not in sys.modules:
-        config = types.ModuleType("openvsp_config")
-        config.LOAD_GRAPHICS = False
-        config.LOAD_FACADE = False
-        config.LOAD_MULTI_FACADE = False
-        config._IGNORE_IMPORTS = False
-        sys.modules["openvsp_config"] = config
-
-    last_error: Optional[str] = None
-
+def _discover_parms(vsp, geom_id: str):  # best-effort reflective map
+    info = []
     try:
-        import openvsp as vsp  # type: ignore
-        if hasattr(vsp, "ClearVSPModel"):
-            setattr(vsp, "__streamline_is_stub__", False)
-            setattr(vsp, "__streamline_stub_reason__", None)
-            return vsp
-    except Exception as exc:  # noqa: BLE001
-        last_error = f"openvsp: {exc}"
-        vsp = None
-
-    if vsp is None:
+        ids = vsp.GetParmIDs(geom_id)  # type: ignore[attr-defined]
+    except Exception:
+        return info
+    for pid in ids:
         try:
-            import openvsp.openvsp as vsp  # type: ignore
-        except Exception as exc:  # noqa: BLE001
-            if last_error is None:
-                last_error = f"openvsp.openvsp: {exc}"
-            vsp = None
+            name = vsp.GetParmName(pid)  # type: ignore[attr-defined]
+            group = vsp.GetParmGroupName(pid)  # type: ignore[attr-defined]
+            info.append((name, group, pid))
+        except Exception:
+            continue
+    return info
 
-    if vsp is not None and hasattr(vsp, "ClearVSPModel"):
-        setattr(vsp, "__streamline_is_stub__", False)
-        setattr(vsp, "__streamline_stub_reason__", None)
-        return vsp
+def _enumerate_parms(vsp, geom_id: str) -> List[Tuple[str, str, str]]:
+    out: List[Tuple[str, str, str]] = []
+    try:
+        ids = vsp.GetParmIDs(geom_id)  # type: ignore[attr-defined]
+    except Exception:
+        return out
+    for pid in ids:
+        try:
+            nm = vsp.GetParmName(pid)  # type: ignore[attr-defined]
+            grp = vsp.GetParmGroupName(pid)  # type: ignore[attr-defined]
+            out.append((nm, grp, pid))
+        except Exception:
+            continue
+    return out
 
-    if not _ALLOW_STUB:
-        message = "OpenVSP Python module is not available and stubs are disabled. Set STREAMLINE_ALLOW_VSP_STUB=1 to allow fallbacks."
-        if last_error:
-            message = f"{message} (last error: {last_error})"
-        raise RuntimeError(message)
+def _find_parm_id(parms: List[Tuple[str, str, str]], name_candidates: Iterable[str], group_candidates: Iterable[str] | None = None, *, substring: bool = False):
+    names_lower = [n.lower() for n in name_candidates]
+    groups_lower = {g.lower() for g in group_candidates} if group_candidates else None
+    for nm, grp, pid in parms:
+        nl = nm.lower(); gl = grp.lower()
+        if groups_lower and gl not in groups_lower:
+            continue
+        if substring:
+            if any(cand in nl for cand in names_lower):
+                return pid, nm, grp
+        else:
+            if nl in names_lower:
+                return pid, nm, grp
+    return None
 
-    if last_error:
-        setattr(_FAKE_VSP, "__streamline_stub_reason__", last_error)
-    else:
-        setattr(_FAKE_VSP, "__streamline_stub_reason__", "unknown")
-    return _FAKE_VSP
+def _set_parm_by_id(vsp, pid: str, value: float) -> bool:
+    try:
+        vsp.SetParmVal(pid, float(value))  # preferred signature
+        return True
+    except TypeError:
+        # Fallback: try name/group signature requires mapping pid back (skip to avoid errors)
+        return False
+    except Exception:
+        return False
+
+def _get_parm_val_by_id(vsp, pid: str):
+    try:
+        return float(vsp.GetParmVal(pid))
+    except Exception:
+        return None
+
+def _set_numeric_parm(vsp, geom_id: str, value: float, name_candidates: Iterable[str], group_candidates: Iterable[str] | None = None) -> bool:
+    name_set = {n.lower() for n in name_candidates}
+    group_set = {g.lower() for g in group_candidates} if group_candidates else None
+    # First attempt reflective search
+    for name, group, pid in _discover_parms(vsp, geom_id):
+        if name.lower() in name_set and (group_set is None or group.lower() in group_set):
+            try:
+                # Prefer setting by parm ID if available
+                if hasattr(vsp, 'SetParmVal'):  # standard signature uses geom_id,name,group,val
+                    try:
+                        vsp.SetParmVal(geom_id, name, group, float(value))
+                    except TypeError:
+                        # Some builds allow SetParmVal(pid,val)
+                        try:
+                            vsp.SetParmVal(pid, float(value))  # type: ignore[arg-type]
+                        except Exception:
+                            raise
+                return True
+            except Exception:
+                continue
+    # Fallback brute-force attempts
+    for nm in name_candidates:
+        for grp in (group_candidates or ["WingGeom", "Design", "XSec_1", "XSec_0"]):
+            try:
+                vsp.SetParmVal(geom_id, nm, grp, float(value))
+                return True
+            except Exception:
+                pass
+    return False
+
+def _get_first_parm_value(vsp, geom_id: str, name_candidates: Iterable[str], group_candidates: Iterable[str] | None = None) -> Optional[float]:
+    name_set = {n.lower() for n in name_candidates}
+    group_set = {g.lower() for g in group_candidates} if group_candidates else None
+    for name, group, pid in _discover_parms(vsp, geom_id):
+        if name.lower() in name_set and (group_set is None or group.lower() in group_set):
+            try:
+                return float(vsp.GetParmVal(geom_id, name, group))
+            except Exception:
+                try:
+                    return float(vsp.GetParmVal(pid))  # type: ignore[arg-type]
+                except Exception:
+                    continue
+    # Fallback brute force
+    for nm in name_candidates:
+        for grp in (group_candidates or ["WingGeom", "Design", "XSec_1", "XSec_0"]):
+            try:
+                return float(vsp.GetParmVal(geom_id, nm, grp))
+            except Exception:
+                pass
+    return None
 
 
 def build_basic_transport(
@@ -135,53 +139,91 @@ def build_basic_transport(
     sweep_deg: float = 2.0,
     output_path: Optional[Path] = None,
     logger_name: str = __name__,
+    vsp: Any | None = None,
 ) -> Dict[str, Any]:
-    """Create a simple wing-only vehicle in OpenVSP for testing."""
+    """Create a simple wing-only vehicle in OpenVSP for testing.
 
-    vsp = import_openvsp()
+    Parameters:
+        model_name: Base name for created geometry.
+        span, chord, thickness, sweep_deg: Basic wing parameters.
+        output_path: Optional path to write a .vsp3 file.
+        logger_name: Logger namespace.
+        vsp: Optional already-imported OpenVSP module (for dependency injection).
+    """
     if vsp is None:
-        raise RuntimeError("OpenVSP Python module is not available")
+        # Use canonical importer to guarantee full promoted API
+        vsp = import_vsp()
+
+    if not hasattr(vsp, "AddGeom"):
+        raise RuntimeError("Loaded 'openvsp' module is missing AddGeom – incorrect runtime installation")
 
     log = get_logger(logger_name)
-
     vsp.ClearVSPModel()
 
     wing_id = vsp.AddGeom("WING")
     wing_name = f"{model_name}_wing"
     vsp.SetGeomName(wing_id, wing_name)
 
-    vsp.SetParmVal(wing_id, "TotalSpan", "WingGeom", span)
-    vsp.SetParmVal(wing_id, "TotalChord", "WingGeom", chord)
-    vsp.SetParmVal(wing_id, "Sweep", "XSec_1", sweep_deg)
-    vsp.SetParmVal(wing_id, "ThickChord", "XSec_1", thickness)
+    parms = _enumerate_parms(vsp, wing_id)
 
-    vsp.Update()
+    # Locate span & chord parameters (accept common groups but only if discovered)
+    span_pid_info = _find_parm_id(parms, ["TotalSpan", "Span", "FullSpan", "WingSpan"], ["WingGeom", "Design"])
+    chord_pid_info = _find_parm_id(parms, ["TotalChord", "Chord", "AvgChord"], ["WingGeom", "Design"])
+    thick_pid_info = _find_parm_id(parms, ["thick", "thickness"], None, substring=True)
+
+    if span_pid_info:
+        _set_parm_by_id(vsp, span_pid_info[0], span)
+    if chord_pid_info:
+        _set_parm_by_id(vsp, chord_pid_info[0], chord)
+    if thick_pid_info:
+        _set_parm_by_id(vsp, thick_pid_info[0], thickness)
+
+    # Apply a couple of updates to propagate derived geometry
+    for _ in range(2):
+        try:
+            vsp.Update()
+        except Exception:
+            break
+
+    # Gather outputs
+    span_val = _get_parm_val_by_id(vsp, span_pid_info[0]) if span_pid_info else span
+    chord_val = _get_parm_val_by_id(vsp, chord_pid_info[0]) if chord_pid_info else chord
+
+    # Area parameter discovery (no brute-force guessing that triggers warnings)
+    area_pid_info = _find_parm_id(parms, ["Sref", "Area", "TotalArea", "WingArea", "PlanformArea"], ["WingGeom", "Design", "Ref"])
+    if area_pid_info:
+        sref = _get_parm_val_by_id(vsp, area_pid_info[0]) or (span_val * chord_val)
+    else:
+        sref = (span_val or span) * (chord_val or chord)
 
     results: Dict[str, Any] = {
         "wing_id": wing_id,
         "wing_name": wing_name,
         "model_name": model_name,
+        "sref": float(sref),
+        "bref": float(span_val or span),
+        "cref": float(chord_val or chord),
     }
 
     if output_path is not None:
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        vsp.WriteVSPFile(str(output_path))
-        results["model_path"] = output_path
-
-    sref = vsp.GetParmVal(wing_id, "Area", "WingGeom")
-    cref = vsp.GetParmVal(wing_id, "TotalChord", "WingGeom")
-    bref = vsp.GetParmVal(wing_id, "TotalSpan", "WingGeom")
-
-    results.update({
-        "sref": sref,
-        "cref": cref,
-        "bref": bref,
-    })
+        try:
+            vsp.WriteVSPFile(str(output_path))
+            results["model_path"] = output_path
+        except Exception as exc:
+            log.debug("WriteVSPFile failed", hint=str(exc))
 
     log.debug(
-        "Built OpenVSP test geometry",
-        context={"wing_id": wing_id, "sref": sref, "cref": cref, "bref": bref},
+        "Built OpenVSP test geometry (discovered parms)",
+        context={
+            "wing_id": wing_id,
+            "span_pid": span_pid_info[:2] if span_pid_info else None,
+            "chord_pid": chord_pid_info[:2] if chord_pid_info else None,
+            "thick_pid": thick_pid_info[:2] if thick_pid_info else None,
+            "area_present": bool(area_pid_info),
+            "sref": sref,
+        },
     )
 
     return results

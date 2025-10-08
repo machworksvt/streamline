@@ -19,9 +19,16 @@ def test_build_basic_transport(tmp_path: Path, real_openvsp):
     assert results["bref"] > 0.0
     assert results["cref"] > 0.0
 
+    # Validate geometry lookup if API available; support builds requiring index argument.
     if hasattr(real_openvsp, "FindGeom"):
-        geom_ids = real_openvsp.FindGeom(results["wing_name"])
+        try:
+            geom_ids = real_openvsp.FindGeom(results["wing_name"])  # standard documented form
+        except TypeError:
+            # Some builds expect (name, index)
+            geom_ids = real_openvsp.FindGeom(results["wing_name"], 0)
         assert geom_ids
 
-    real_openvsp.ClearVSPModel()
-    real_openvsp.WriteVSPFile(str(model_path))
+    # No redundant WriteVSPFile after ClearVSPModel; build_basic_transport already wrote the file.
+    # Simple cleanup without exporting an empty model.
+    if hasattr(real_openvsp, "ClearVSPModel"):
+        real_openvsp.ClearVSPModel()
