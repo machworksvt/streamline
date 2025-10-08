@@ -1,34 +1,79 @@
-name: CI
+name: tests
 
 on:
   push:
-    branches: ["**"]
+    branches: [ "**" ]
   pull_request:
+    branches: [ "**" ]
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash -l {0}
 
 jobs:
-  tests:
-    runs-on: windows-latest
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest]
+        python: ["3.11"]
+    runs-on: ${{ matrix.os }}
+    env:
+      STREAMLINE_ALLOW_VSP_STUB: "0"
+      STREAMLINE_DEBUG_VSP: "0"
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Configure OpenVSP environment
-        shell: pwsh
-        run: |
-          $root = "${{ github.workspace }}\OpenVSP-3.42.3-win64"
-          echo "OPENVSP_ROOT=$root" >> $env:GITHUB_ENV
-          echo "PYTHONPATH=${{ github.workspace }};$root\python" >> $env:GITHUB_ENV
-          echo "PATH=$root;$root\python;$root\scripts;$root\vspaero_ex;$env:PATH" >> $env:GITHUB_ENV
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Cache OpenVSP downloads
+        uses: actions/cache@v4
         with:
-          python-version: "3.12"
+          path: |
+            ~/.cache/openvsp/downloads
+          key: openvsp-downloads-${{ runner.os }}-${{ hashFiles('tools/openvsp.json') }}
 
-      - name: Install dependencies
+      - name: Setup Conda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          environment-file: environment.yml
+          activate-environment: streamline
+          python-version: ${{ matrix.python }}
+          auto-activate-base: false
+          use-mamba: true
+          miniforge-version: latest
+
+      - name: Show Conda info
+        run: |
+          conda info
+          conda list
+
+      - name: Install project (editable) + test deps
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest
+          python -m pip install -e .
+          python -m pip install pytest
+
+      - name: Bootstrap OpenVSP runtime
+        run: |
+          pwsh -File setup_streamline.ps1 -Force
+
+      - name: Display OpenVSP env vars
+        run: |
+          python - <<'PY'
+          import os
+          for k in sorted([k for k in os.environ if k.startswith(('OPENVSP','STREAMLINE_'))]):
+              print(f"{k}={os.environ[k]}")
+          PY
 
       - name: Run tests
-        run: pytest
+        run: |
+          python -c "import sys; print('Python', sys.version)"
+          pytest -vv --maxfail=1
+
+      - name: Upload pytest results (always)
+        if: always()
+        run: |
+          echo "(Placeholder for future artifact upload)"

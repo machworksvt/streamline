@@ -1,0 +1,34 @@
+{
+  "version": "3.46.0",
+  "description": "Official OpenVSP binary distributions used by Streamline.",
+  "license": "https://openvsp.org/wiki/doku.php?id=license:nosa",
+  "platforms": {
+    "windows": {
+      "url": "https://openvsp.org/download.php?file=zips/current/windows/OpenVSP-3.46.0-win64-Python3.11.zip",
+      "archive_type": "zip",
+      "archive_subdir": "OpenVSP-3.46.0-win64",
+      "python_subdir": "python",
+      "library_subdirs": ["", "bin", "vspaero_ex"],
+      "python_versions": ["3.11"],
+      "sha256": null
+    },
+    "linux": {
+      "url": "https://openvsp.org/download.php?file=zips/current/linux/OpenVSP-3.46.0-Ubuntu22.04-Python3.11.tar.xz",
+      "archive_type": "tar",
+      "archive_subdir": "OpenVSP-3.46.0-Ubuntu22.04",
+      "python_subdir": "python",
+      "library_subdirs": ["bin", "vspaero_ex", "lib"],
+      "python_versions": ["3.11"],
+      "sha256": null
+    },
+    "macos": {
+      "url": "https://openvsp.org/download.php?file=zips/current/mac/OpenVSP-3.46.0-macOS-Python3.11.zip",
+      "archive_type": "zip",
+      "archive_subdir": "OpenVSP-3.46.0-macOS",
+      "python_subdir": "python",
+      "library_subdirs": ["", "bin"],
+      "python_versions": ["3.11"],
+      "sha256": null
+    }
+  }
+}

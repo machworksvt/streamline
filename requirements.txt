@@ -5,3 +5,4 @@ textual>=0.66
 rich>=13
 matplotlib>=3.8
 reportlab>=4
+pytest>=8.0

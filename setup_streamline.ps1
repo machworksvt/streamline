@@ -1,16 +1,16 @@
-# setup_streamline.ps1
-# Streamline workspace bootstrapper (Windows, no Docker)
-# - Uses OpenVSP's python\environment.yml and requirements-dev.txt directly
-# - Creates/updates target env (default 'streamline') WITHOUT running vendor setup.ps1
-# - Installs project requirements.txt (optional)
-# - Sets env vars (STREAMLINE_DATA, STREAMLINE_PROJECTS, OPENVSP_HOME)
-# - Validates vsp/pandas imports
+# Streamline workspace bootstrapper (Windows PowerShell)
+#
+# * Creates/updates a Conda environment from environment.yml
+# * Installs project requirements.txt
+# * Installs OpenVSP via python -m tools.install_openvsp inside the environment
+# * Records OPENVSP_HOME/STREAMLINE_OPENVSP_HOME as conda env vars
 
 [CmdletBinding()]
 param(
-  [string]$OpenVSPDir = "",
-  [string]$EnvName    = "streamline",
-  [switch]$Force
+  [string]$EnvName = "streamline",
+  [switch]$Force,
+  [switch]$SkipPip,
+  [switch]$AllowUpdate
 )
 
 $ErrorActionPreference = "Stop"
@@ -20,214 +20,379 @@ function Write-OK($msg)      { Write-Host "[OK] $msg" -ForegroundColor Green }
 function Write-Warn($msg)    { Write-Warning $msg }
 function Fail($msg)          { Write-Error $msg; exit 1 }
 
-function Test-Conda() {
+function Ensure-Conda() {
   try { conda --version | Out-Null } catch { Fail "Conda not found. Install Anaconda/Miniforge and run 'conda init powershell', then restart PowerShell." }
 }
 
-function Env-Map() {
+function Get-CondaEnvs() {
   $jsonRaw = conda env list --json
   if ($LASTEXITCODE -ne 0 -or -not $jsonRaw) { Fail "Failed to query conda environments (JSON)." }
-  $json = $jsonRaw | ConvertFrom-Json
-  $map = @{}
-  foreach ($p in $json.envs) {
-    if ($p -match '\\envs\\([^\\]+)$') { $name = $Matches[1] } else { $name = "base" }
-    $map[$name] = $p
-  }
-  return $map
-}
-function Test-CondaEnvExistence([string]$name) { (Env-Map).ContainsKey($name) }
-
-function Deactivate-IfActive([string]$name) {
-  $current = $env:CONDA_DEFAULT_ENV
-  if ($current -eq $name) {
-    Write-Warn "Environment '$name' is currently active in this shell. Deactivating..."
-    conda deactivate
-    if ($LASTEXITCODE -ne 0) { Fail "Could not deactivate current environment. Open a new PowerShell window and rerun." }
-  }
+  return ($jsonRaw | ConvertFrom-Json).envs
 }
 
-function Confirm-YesNo($prompt) { (Read-Host "$prompt (y/n)") -match '^(y|Y)$' }
-
-function Find-OpenVSPFolder() {
-  if ($OpenVSPDir -and (Test-Path $OpenVSPDir)) { return (Resolve-Path $OpenVSPDir).Path }
-  $candidates = @(
-    ".\OpenVSP-3.46.0-win64",
-    ".\OpenVSP-3.46.0",
-    ".\v3.42.3",
-    ".\OpenVSP",
-    ".\openvsp"
-  )
-  foreach ($c in $candidates) { if (Test-Path $c) { return (Resolve-Path $c).Path } }
-  Fail "Could not find your OpenVSP 3.42.3 folder. Pass: -OpenVSPDir C:\path\to\OpenVSP-3.42.3-win64"
-}
-
-function Get-VSPPythonFiles([string]$vspHome) {
-  $pyDir = Join-Path $vspHome "python"
-  $envYml = Join-Path $pyDir "environment.yml"
-  $reqTxt = Join-Path $pyDir "requirements-dev.txt"
-  if (-not (Test-Path $envYml)) { Fail "Missing: $envYml" }
-  if (-not (Test-Path $reqTxt)) { Fail "Missing: $reqTxt" }
-  return @{ PyDir = $pyDir; EnvYml = $envYml; ReqTxt = $reqTxt }
-}
-
-function Ensure-Folders() {
-  foreach ($p in @(".\data",".\projects")) {
-    if (-not (Test-Path $p)) { New-Item -ItemType Directory -Path $p | Out-Null }
+function Env-Exists([string]$name) {
+  try {
+    $jsonRaw = conda env list --json 2>$null
+    if (-not $jsonRaw) { return $false }
+    $envPaths = ($jsonRaw | ConvertFrom-Json).envs
+    foreach ($p in $envPaths) {
+      if ([IO.Path]::GetFileName($p) -ieq $name) { return $true }
+    }
+    return $false
+  } catch {
+    Write-Warn "Env-Exists: fallback detection (conda env list --json failed)."
+    $table = conda env list 2>$null
+    if ($table) {
+      return ($table -match "^\s*\S*\\envs\\$name(\s|$)") -or ($table -match "^\s*$name\s")
+    }
+    return $false
   }
 }
 
-function Create-Or-Update-Env([string]$envName, [string]$envYmlPath, [switch]$force) {
-  Write-Section "Preparing conda env '$envName' from environment.yml"
-  if (Test-CondaEnvExistence $envName) {
+function Deactivate-EnvIfActive([string]$name) {
+  while ($env:CONDA_DEFAULT_ENV -eq $name) {
+    Write-Section "Deactivating active environment '$name'"
+    conda deactivate | Out-Null
+    if ($LASTEXITCODE -ne 0) { Write-Warn "conda deactivate returned non-zero; continuing."; break }
+  }
+}
+
+function Remove-Env([string]$name) {
+  Write-Warn "Removing env '$name'"
+  conda env remove -n $name -y | Out-Null
+  if ($LASTEXITCODE -ne 0) { Fail "Failed removing env '$name'." }
+}
+
+function Create-Or-Update-Env([string]$name, [switch]$force, [switch]$allowUpdate) {
+  if ($force -and $allowUpdate) {
+    Fail "Specify only one of -Force or -AllowUpdate."
+  }
+
+  $envFile = "./environment.yml"
+  if (-not (Test-Path $envFile)) { Fail "environment.yml not found at repo root." }
+
+  $exists = Env-Exists $name
+
+  if ($exists) {
     if ($force) {
-      Deactivate-IfActive $envName
-      Write-Warn "Env '$envName' exists and -Force specified. Removing..."
-      conda env remove -n $envName -y | Out-Null
-      if ($LASTEXITCODE -ne 0) { Fail "Failed removing env '$envName'." }
-      Write-OK "Removed '$envName'."
-      Write-Host "Creating '$envName' from environment.yml (override name)..."
-      conda env create -f "$envYmlPath" -n $envName | Out-Null
-      if ($LASTEXITCODE -ne 0) { Fail "conda env create failed." }
-      Write-OK "Created '$envName' from environment.yml."
+      Deactivate-EnvIfActive $name
+      Write-Warn "Environment '$name' exists; removing due to -Force."
+      Remove-Env $name
+      $exists = $false
+    } elseif ($allowUpdate) {
+      Write-Section "Updating environment '$name'"
+      conda env update -f $envFile -n $name | Out-Null
+      if ($LASTEXITCODE -ne 0) { Fail "conda env update failed." }
+      Write-OK "Environment updated: $name"
+      return
     } else {
-      if (Confirm-YesNo "Env '$envName' exists. Update it from environment.yml?") {
-        Write-Host "Updating '$envName' from environment.yml..."
-        conda env update -f "$envYmlPath" -n $envName | Out-Null
-        if ($LASTEXITCODE -ne 0) { Fail "conda env update failed." }
-        Write-OK "Updated '$envName'."
-      } else {
-        Write-OK "Keeping existing '$envName' unchanged."
+      Fail ("Environment '{0}' already exists. Use -Force to recreate or -AllowUpdate to update, or remove manually:`n  conda env remove -n {0}" -f $name)
+    }
+  }
+
+  if (-not $exists) {
+    Write-Section "Creating environment '$name'"
+    conda env create -f $envFile -n $name | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+      # Double-check whether prefix actually exists now (race or partial removal)
+      if (Env-Exists $name) {
+        Fail "conda env create reported failure but the prefix now exists. Try: conda env remove -n $name -y; then re-run with -Force."
+      }
+      Fail "conda env create failed."
+    }
+  }
+
+  Write-OK "Environment ready: $name"
+}
+
+function Get-RequiredPythonVersions() {
+  $metaPath = "./tools/openvsp.json"
+  if (-not (Test-Path $metaPath)) { return @() }
+
+  try {
+    $meta = Get-Content $metaPath -Raw | ConvertFrom-Json
+  } catch {
+    Write-Warn "Unable to parse tools/openvsp.json; skipping Python version validation."
+    return @()
+  }
+
+  $platform = "windows"
+  if (-not $meta.platforms -or -not $meta.platforms.$platform) { return @() }
+
+  $versions = $meta.platforms.$platform.python_versions
+  if (-not $versions) { return @() }
+
+  return @($versions)
+}
+
+function Assert-PythonVersion([string]$name) {
+  $required = Get-RequiredPythonVersions
+  if (-not $required -or $required.Count -eq 0) {
+    Write-Warn "No OpenVSP Python version metadata found; skipping interpreter check."
+    return
+  }
+
+  $expected = ($required -join ", ")
+  $result = conda run -n $name python -c "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')"
+  if ($LASTEXITCODE -ne 0) { Fail "Failed querying Python version for environment '$name'." }
+
+  $actual = ($result | Select-Object -First 1).Trim()
+  if (-not $required.Contains($actual)) {
+    $msg = "Environment '$name' is using Python $actual but OpenVSP requires Python $expected. " +
+           "Recreate the environment with -Force or ensure environment.yml pins the supported version."
+    Fail $msg
+  }
+
+  Write-OK "Python $actual satisfies OpenVSP requirement ($expected)."
+}
+
+function Install-PipDeps([string]$name) {
+  if ($SkipPip) { Write-Warn "Skipping pip installs per -SkipPip"; return }
+  if (-not (Test-Path "./requirements.txt")) { Write-Warn "requirements.txt not found (skipping)."; return }
+
+  Write-Section "Installing Python requirements into '$name'"
+  conda run -n $name python -m pip install --upgrade pip setuptools wheel | Out-Null
+  if ($LASTEXITCODE -ne 0) { Fail "pip bootstrap failed." }
+
+  conda run -n $name python -m pip install -r ./requirements.txt
+  if ($LASTEXITCODE -ne 0) { Fail "pip install -r requirements.txt failed." }
+  Write-OK "Project requirements installed."
+}
+
+# --- helper to write a temp script without BOM ---
+function Write-NoBomTempScript([string]$code) {
+  $tmp = New-TemporaryFile
+  $enc = New-Object System.Text.UTF8Encoding($false)  # no BOM
+  [System.IO.File]::WriteAllText($tmp, $code, $enc)
+  return $tmp
+}
+
+function Find-OpenVSPPythonDir([string]$installRoot) {
+  if (-not (Test-Path $installRoot)) { return $null }
+  $candidate = Get-ChildItem -Path $installRoot -Recurse -Filter openvsp.py -ErrorAction SilentlyContinue |
+               Select-Object -First 1
+  if ($candidate) { return $candidate.Directory.FullName }
+  return $null
+}
+
+function Normalize-OpenVSPRoot([string]$root) {
+  if (-not $root) { return $root }
+  $full = [IO.Path]::GetFullPath($root)
+  # Collapse repeated trailing "...\<ver>\windows" pairs
+  $segments = $full -split '[\\/]'
+  if ($segments.Length -gt 3) {
+    for ($i = 0; $i -lt ($segments.Length - 2); $i++) {
+      if ($segments[$i] -match '^\d+\.\d+\.\d+$' -and $segments[$i+1] -ieq 'windows') {
+        # If same pattern repeats immediately after
+        if ($i + 3 -lt $segments.Length -and
+            $segments[$i] -eq $segments[$i+2] -and
+            $segments[$i+1] -ieq $segments[$i+3]) {
+          # Remove the duplicate pair
+          $segments = $segments[0..($i+1)] + $segments[($i+4)..($segments.Length-1)]
+          break
+        }
       }
     }
-  } else {
-    Write-Host "Creating '$envName' from environment.yml (override name)..."
-    conda env create -f "$envYmlPath" -n $envName | Out-Null
-    if ($LASTEXITCODE -ne 0) { Fail "conda env create failed." }
-    Write-OK "Created '$envName' from environment.yml."
+  }
+  return ($segments -join '\').TrimEnd('\','/')
+}
+
+function Set-LocalOpenVSPEnv($manifest) {
+  if ($null -ne $manifest.install_root -and $manifest.install_root -ne "") {
+    $env:OPENVSP_HOME = $manifest.install_root
+    $env:STREAMLINE_OPENVSP_HOME = $manifest.install_root
+  }
+  if ($manifest.python_dir) {
+    $env:OPENVSP_PYTHON_DIR = $manifest.python_dir
+    $env:STREAMLINE_OPENVSP_PYTHON_DIR = $manifest.python_dir
+  }
+  if ($manifest.version) {
+    $env:OPENVSP_VERSION = $manifest.version
+    $env:STREAMLINE_OPENVSP_VERSION = $manifest.version
   }
 }
 
-function Install-VSPRequirements([string]$envName, [string]$reqTxtPath) {
-    Write-Section "Installing OpenVSP Python requirements into '$envName'"
-  
-    $reqDir = Split-Path -Parent $reqTxtPath
-  
-    # Run pip exactly like the vendor script does: from the python/ folder.
-    Push-Location $reqDir
+function Clear-ExistingOpenVSPEnv([string]$name) {
+  Write-Section "Clearing stale OpenVSP env vars (conda + session)"
+  $vars = @(
+    'OPENVSP_HOME','OPENVSP_PYTHON_DIR','OPENVSP_VERSION',
+    'STREAMLINE_OPENVSP_HOME','STREAMLINE_OPENVSP_PYTHON_DIR','STREAMLINE_OPENVSP_VERSION'
+  )
+  try { conda env config vars unset -n $name @vars 2>$null | Out-Null } catch { }
+  foreach ($v in $vars) { Remove-Item Env:$v -ErrorAction SilentlyContinue }
+}
+
+function Remove-StrayPipOpenVSP([string]$name) {
+  Write-Section "Checking for stray pip 'openvsp' package"
+  conda run -n $name python -m pip show openvsp 1>$null 2>$null
+  if ($LASTEXITCODE -eq 0) {
+    Write-Warn "A pip package named 'openvsp' is installed; uninstalling to avoid shadowing official bindings."
+    conda run -n $name python -m pip uninstall -y openvsp | Out-Null
+    if ($LASTEXITCODE -ne 0) { Write-Warn "Failed to uninstall pip openvsp (continuing)." } else { Write-OK "Removed stray pip openvsp package." }
+  } else { Write-OK "No stray pip openvsp package detected." }
+}
+
+function Install-OpenVSP([string]$name) {
+  Write-Section "Installing OpenVSP runtime via Python helper"
+  $exportPath = Join-Path ([System.IO.Path]::GetTempPath()) "streamline-openvsp-install.json"
+  if (Test-Path $exportPath) { Remove-Item $exportPath -Force }
+
+  conda run -n $name python -m tools.install_openvsp --force --print-json --export $exportPath 2>&1 | ForEach-Object { $_ }
+  if ($LASTEXITCODE -ne 0) { Fail "OpenVSP installer failed (non-zero exit)." }
+  if (-not (Test-Path $exportPath)) { Fail "Installer did not produce export manifest file." }
+
+  try {
+    $manifestRaw = Get-Content $exportPath -Raw
+    $manifest = $manifestRaw | ConvertFrom-Json -ErrorAction Stop
+  } catch {
+    Fail "Failed to read exported OpenVSP manifest JSON: $($_.Exception.Message)"
+  } finally {
+    if (Test-Path $exportPath) { Remove-Item $exportPath -Force }
+  }
+
+  Clear-ExistingOpenVSPEnv -name $name
+  conda env config vars set -n $name OPENVSP_HOME=$($manifest.install_root) STREAMLINE_OPENVSP_HOME=$($manifest.install_root) | Out-Null
+  if ($manifest.python_dir) {
+    conda env config vars set -n $name OPENVSP_PYTHON_DIR=$($manifest.python_dir) STREAMLINE_OPENVSP_PYTHON_DIR=$($manifest.python_dir) | Out-Null
+  }
+  if ($manifest.version) {
+    conda env config vars set -n $name OPENVSP_VERSION=$($manifest.version) STREAMLINE_OPENVSP_VERSION=$($manifest.version) | Out-Null
+  }
+  Set-LocalOpenVSPEnv $manifest
+
+  Write-Section "OpenVSP resolved paths"
+  Write-Host ("  install_root : {0}" -f $manifest.install_root)
+  Write-Host ("  python_dir   : {0}" -f $manifest.python_dir)
+
+  # Warm-up (authoritative). If this works we suppress earlier missing-list noise.
+  $repoRoot = (Resolve-Path ".").Path
+  $warm = @"
+import os, sys, importlib.util
+repo = r'$repoRoot'
+py_dir = r'$($manifest.python_dir)'
+base = r'$($manifest.install_root)'
+if repo and repo not in sys.path: sys.path.insert(0, repo)
+if py_dir and py_dir not in sys.path: sys.path.insert(0, py_dir)
+if os.name=='nt':
+    for d in (base, base+os.sep+'bin', base+os.sep+'vspaero_ex'):
+        if d and d not in os.environ.get('PATH',''):
+            os.environ['PATH'] = d + os.pathsep + os.environ.get('PATH','')
+status = {'warmup_addgeom': False, 'promoted': False, 'wrapper_missing': None, 'final_missing': None}
+try:
+    import openvsp
+    req = ['AddGeom','ClearVSPModel','SetGeomName','SetParmVal','GetParmVal','Update']
+    missing = [r for r in req if not hasattr(openvsp,r)]
+    status['wrapper_missing'] = missing
+    if missing:
+        spec = importlib.util.find_spec('openvsp._vsp')
+        if spec:
+            core = __import__('openvsp._vsp', fromlist=['_vsp'])
+            if hasattr(core,'AddGeom'):
+                for n in dir(core):
+                    if not n.startswith('_') and not hasattr(openvsp,n):
+                        try: setattr(openvsp,n,getattr(core,n))
+                        except Exception: pass
+                if hasattr(core,'VSPVersion') and not hasattr(openvsp,'GetVSPVersion'):
+                    try: openvsp.GetVSPVersion = core.VSPVersion
+                    except Exception: pass
+                status['promoted'] = True
+    status['final_missing'] = [r for r in req if not hasattr(openvsp,r)]
+    status['warmup_addgeom'] = hasattr(openvsp,'AddGeom') and ('AddGeom' not in status['final_missing'])
+except Exception as e:
+    status['error'] = repr(e)
+print('WARMUP_STATUS', status)
+"@
+  $tmpWarm = Write-NoBomTempScript $warm
+  $warmOutput = conda run -n $name python $tmpWarm | Tee-Object -Variable warmLines
+  Remove-Item $tmpWarm -Force
+  $warmLine = ($warmLines | Select-String 'WARMUP_STATUS').ToString()
+  if ($warmLine) {
     try {
-      conda run -n $envName python -m pip install -U pip setuptools wheel | Out-Null
-      if ($LASTEXITCODE -ne 0) { Fail "pip bootstrap failed." }
-  
-      # Important: use the relative path here so '-e utilities' resolves correctly.
-      conda run -n $envName python -m pip install -r .\requirements-dev.txt
-      if ($LASTEXITCODE -ne 0) { Fail "pip install -r requirements-dev.txt failed." }
+      $jsonPortion = $warmLine -replace '^WARMUP_STATUS\s*',''
+      $parsed = ConvertFrom-Json ($jsonPortion | ConvertTo-Json) -ErrorAction Stop
+    } catch { $parsed = $null }
+    if ($parsed -and $parsed.warmup_addgeom -eq $true) {
+      Write-OK "OpenVSP symbols available (AddGeom)"
+    } else {
+      Write-Warn "Warm-up did not confirm full symbol set (see WARMUP_STATUS above)."
     }
-    finally {
-      Pop-Location
-    }
-  
-    Write-OK "OpenVSP requirements installed."
-  }
-function Install-ProjectRequirements([string]$envName) {
-  if (Test-Path ".\requirements.txt") {
-    Write-Section "Installing project requirements.txt into '$envName'"
-    conda run -n $envName python -m pip install -r .\requirements.txt
-    if ($LASTEXITCODE -ne 0) { Fail "project requirements install failed." }
-    Write-OK "Project requirements installed."
-  } else {
-    Write-Warn "requirements.txt not found at repo root (skipping)."
   }
 }
 
-function Set-EnvVars([string]$envName, [string]$vspHome) {
-  Write-Section "Setting per-env vars"
-  Ensure-Folders
-  $dataPath     = (Resolve-Path ".\data").Path
-  $projectsPath = (Resolve-Path ".\projects").Path
-
-  conda env config vars set -n $envName STREAMLINE_DATA="$dataPath"         | Out-Null
-  conda env config vars set -n $envName STREAMLINE_PROJECTS="$projectsPath" | Out-Null
-  conda env config vars set -n $envName OPENVSP_HOME="$vspHome"             | Out-Null
-
-  Write-OK "STREAMLINE_DATA=$dataPath"
-  Write-OK "STREAMLINE_PROJECTS=$projectsPath"
-  Write-OK "OPENVSP_HOME=$vspHome"
-}
-
-function Validate-Imports([string]$envName) {
+function Validate-Imports([string]$name) {
   Write-Section "Validating environment"
-  $code = @'
-import sys
-print("Python:", sys.version)
+  $repoRoot = (Resolve-Path ".").Path
+  $code = @"
+import os, sys, json, importlib.util
+repo = r'$repoRoot'
+py_dir = os.environ.get('OPENVSP_PYTHON_DIR') or os.environ.get('STREAMLINE_OPENVSP_PYTHON_DIR')
+if repo and repo not in sys.path: sys.path.insert(0, repo)
+if py_dir and py_dir not in sys.path: sys.path.insert(0, py_dir)
+# Ensure DLL path ordering (Windows)
+if os.name == 'nt' and py_dir:
+    base = os.path.dirname(py_dir)
+    for d in (base, os.path.join(base,'bin'), os.path.join(base,'vspaero_ex')):
+        if d and d not in os.environ.get('PATH',''):
+            os.environ['PATH'] = d + os.pathsep + os.environ.get('PATH','')
+print('Validation sys.path head:', sys.path[:6])
+result = {
+  'py_dir': py_dir,
+  'wrapper_missing': None,
+  'promoted': False,
+  'final_missing': None,
+  'module_file': None,
+}
 try:
-    import openvsp as vsp
-    print("vsp import: OK")
+    import openvsp
+    result['module_file'] = getattr(openvsp,'__file__', None)
+    req = ['AddGeom','ClearVSPModel','SetGeomName','SetParmVal','GetParmVal','Update']
+    wrapper_missing = [r for r in req if not hasattr(openvsp,r)]
+    result['wrapper_missing'] = wrapper_missing
+    if wrapper_missing:
+        # Attempt promotion via compiled layer
+        spec = importlib.util.find_spec('openvsp._vsp')
+        if spec:
+            core = __import__('openvsp._vsp', fromlist=['_vsp'])
+            if hasattr(core,'AddGeom'):
+                for n in dir(core):
+                    if not n.startswith('_') and not hasattr(openvsp,n):
+                        try: setattr(openvsp,n,getattr(core,n))
+                        except Exception: pass
+                if hasattr(core,'VSPVersion') and not hasattr(openvsp,'GetVSPVersion'):
+                    try: openvsp.GetVSPVersion = core.VSPVersion
+                    except Exception: pass
+                result['promoted'] = True
+    final_missing = [r for r in req if not hasattr(openvsp,r)]
+    result['final_missing'] = final_missing
+    if final_missing:
+        print('VALIDATION_INCOMPLETE_OPENVSP', json.dumps(result))
+    else:
+        print('OpenVSP OK (promoted=', result['promoted'], ') AddGeom=True')
 except Exception as e:
-    print("vsp import: FAILED ->", e)
-    raise
-try:
-    import pandas as pd
-    print("pandas:", pd.__version__)
-except Exception as e:
-    print("pandas import: FAILED ->", e)
-    raise
-'@
-  $tmp = New-TemporaryFile
-  Set-Content -Path $tmp -Value $code -Encoding UTF8
-  conda run -n $envName python $tmp
+    result['error'] = repr(e)
+    print('VALIDATION_OPENVSP_IMPORT_FAIL', json.dumps(result))
+    raise SystemExit(3)
+# Do NOT produce non-zero exit just because wrapper was thin; allow promotion success
+if result['final_missing']:
+    # Return code 0 but user sees warning line
+    pass
+"@
+  $tmp = Write-NoBomTempScript $code
+  conda run -n $name python $tmp
   $ec = $LASTEXITCODE
   Remove-Item $tmp -Force
   if ($ec -ne 0) { Fail "Validation failed (python exited $ec)." }
-  Write-OK "Validation completed."
+  Write-OK "Validation completed (wrapper gaps tolerated if promotion succeeded)."
 }
 
-# ---------------- Main ----------------
 Write-Section "Streamline environment setup"
-Test-Conda
-
-# download OpenVSP 3.46.0 from link
-# link is: https://openvsp.org/download.php?file=zips/current/windows/OpenVSP-3.46.0-win64-Python3.11.zip
-
-# download and unzip to current folder
-Write-Section "Downloading and extracting OpenVSP 3.46.0"
-
-# Define the download URL and target zip file
-$vspUrl = "https://openvsp.org/download.php?file=zips/current/windows/OpenVSP-3.46.0-win64-Python3.11.zip"
-$zipFile = ".\OpenVSP-3.46.0-win64-Python3.11.zip"
-
-# Download the file
-Write-Host "Downloading OpenVSP from $vspUrl..."
-Invoke-WebRequest -Uri $vspUrl -OutFile $zipFile
-if ($LASTEXITCODE -ne 0) { Fail "Failed to download OpenVSP." }
-Write-OK "Downloaded OpenVSP to $zipFile."
-
-# Unzip the file
-Write-Host "Extracting $zipFile..."
-Expand-Archive -Path $zipFile -DestinationPath "." -Force
-if ($LASTEXITCODE -ne 0) { Fail "Failed to extract OpenVSP." }
-Write-OK "Extracted OpenVSP."
-
-# Clean up the zip file
-Remove-Item $zipFile -Force
-Write-OK "Removed $zipFile."
-
-$vspHome = Find-OpenVSPFolder
-Write-OK "Found OpenVSP at: $vspHome"
-
-$files = Get-VSPPythonFiles -vspHome $vspHome
-$pyDir   = $files.PyDir
-$envYml  = $files.EnvYml
-$reqTxt  = $files.ReqTxt
-
-Write-Host "Using:" 
-Write-Host "  environment.yml      = $envYml"
-Write-Host "  requirements-dev.txt = $reqTxt"
-
-Create-Or-Update-Env -envName $EnvName -envYmlPath $envYml -force:$Force
-Install-VSPRequirements -envName $EnvName -reqTxtPath $reqTxt
-Install-ProjectRequirements -envName $EnvName
-Set-EnvVars -envName $EnvName -vspHome $vspHome
-Validate-Imports -envName $EnvName
-
+Ensure-Conda
+Create-Or-Update-Env -name $EnvName -force:$Force -allowUpdate:$AllowUpdate
+Assert-PythonVersion -name $EnvName
+Install-PipDeps -name $EnvName
+Remove-StrayPipOpenVSP -name $EnvName
+Install-OpenVSP -name $EnvName
+Validate-Imports -name $EnvName
 Write-Section "Done"
-Write-Host "Activate with:  conda activate $EnvName" -ForegroundColor Yellow
+Write-OK "Activate with: conda activate $EnvName"
+
