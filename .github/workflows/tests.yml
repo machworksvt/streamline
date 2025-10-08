@@ -63,10 +63,10 @@ jobs:
       - name: Display OpenVSP env vars
         run: |
           python - <<'PY'
-import os
-for k in sorted([k for k in os.environ if k.startswith(('OPENVSP','STREAMLINE_'))]):
-    print(k,'=',os.environ[k])
-PY
+          import os
+          for k in sorted([k for k in os.environ if k.startswith(('OPENVSP','STREAMLINE_'))]):
+              print(f"{k}={os.environ[k]}")
+          PY
 
       - name: Run tests
         run: |
