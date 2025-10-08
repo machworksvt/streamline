@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import os
 import platform
 import shutil
 import site
+import subprocess
 import sys
 import sysconfig
 import tarfile
@@ -154,6 +156,71 @@ def verify_checksum(path: Path, expected_sha256: Optional[str]) -> None:
     if actual.lower() != expected_sha256.lower():
         raise RuntimeError("Checksum mismatch", {"expected": expected_sha256, "actual": actual})
 
+def _extract_deb(archive: Path, destination: Path) -> None:
+    """Extract a Debian package into *destination*.
+
+    Prefer the system ``dpkg-deb`` tool when available (common on CI runners).
+    Otherwise fall back to a minimal in-Python ar reader that unpacks the
+    contained ``data.tar.*`` payload.
+    """
+
+    ensure_directory(destination)
+    dpkg = shutil.which("dpkg-deb")
+    if dpkg:
+        subprocess.check_call([dpkg, "-x", str(archive), str(destination)])
+        return
+
+    # Minimal ar archive reader to locate and expand data.tar.* member
+    with archive.open("rb") as fh:
+        magic = fh.read(8)
+        if magic != b"!<arch>\n":
+            raise RuntimeError("Invalid deb archive magic", {"magic": magic})
+
+        def read_entry_header() -> tuple[str, int]:
+            header = fh.read(60)
+            if not header:
+                return "", -1
+            if len(header) != 60:
+                raise RuntimeError("Corrupt ar header", {"size": len(header)})
+            name = header[0:16].decode("utf-8", "ignore").rstrip()
+            size_field = header[48:58].decode("utf-8", "ignore").strip()
+            try:
+                size = int(size_field)
+            except ValueError as exc:
+                raise RuntimeError("Invalid ar size field", {"value": size_field}) from exc
+            if header[58:60] != b"`\n":
+                raise RuntimeError("Invalid ar header trailer", {"value": header[58:60]})
+            return name.rstrip("/"), size
+
+        data_payload: Optional[bytes] = None
+        data_name = ""
+        while True:
+            name, size = read_entry_header()
+            if size < 0:
+                break
+            payload = fh.read(size)
+            if size % 2 == 1:
+                fh.seek(1, os.SEEK_CUR)
+            lower_name = name.lower()
+            if lower_name.startswith("data.tar"):
+                data_payload = payload
+                data_name = lower_name
+        if not data_payload:
+            raise RuntimeError("Debian package missing data.tar payload")
+
+    # Determine compression from filename suffix
+    mode = "r:"
+    if data_name.endswith(".xz"):
+        mode = "r:xz"
+    elif data_name.endswith(".gz"):
+        mode = "r:gz"
+    elif data_name.endswith(".bz2"):
+        mode = "r:bz2"
+
+    with tarfile.open(fileobj=io.BytesIO(data_payload), mode=mode) as tar:
+        tar.extractall(destination)
+
+
 def extract_archive(archive: Path, destination: Path, archive_type: str) -> Path:
     ensure_directory(destination)
     if archive_type == "zip":
@@ -162,6 +229,8 @@ def extract_archive(archive: Path, destination: Path, archive_type: str) -> Path
     elif archive_type == "tar":
         with tarfile.open(archive) as t:
             t.extractall(destination)
+    elif archive_type == "deb":
+        _extract_deb(archive, destination)
     else:
         raise RuntimeError(f"Unsupported archive type: {archive_type}")
     return destination
