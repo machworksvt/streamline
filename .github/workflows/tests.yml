@@ -41,7 +41,7 @@ jobs:
           micromamba run -n streamline python -m pip install -e .
           micromamba run -n streamline python -m pip install pytest
 
-      - name: Install OpenVSP runtime
+      - name: Install OpenVSP runtime and run tests
         run: |
           $vspUrl = "https://openvsp.org/download.php?file=zips/current/windows/OpenVSP-3.46.0-win64-Python3.11.zip"
           $vspZip = Join-Path $PWD "OpenVSP.zip"
@@ -71,9 +71,6 @@ jobs:
           Add-Content -Path $env:GITHUB_PATH -Value "$vspBin`n"
           Add-Content -Path $env:GITHUB_ENV -Value "PYTHONPATH=$vspPython`n"
           micromamba run -n streamline python -c "import openvsp; print('OpenVSP version:', openvsp.GetVSPVersion())"
-
-      - name: Run tests
-        run: |
           micromamba run -n streamline python -c "import sys; print('Python', sys.version)"
           micromamba run -n streamline pytest -vv --maxfail=1
 
