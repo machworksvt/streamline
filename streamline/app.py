@@ -25,16 +25,19 @@ from textual import events
 from textual.containers import Horizontal, Vertical
 from textual.timer import Timer
 
-from .tui.context import ProjectSession, create_project_session
+from .tui import ProjectSession, create_project_session
 from .tui.event_bus import get_global_event_bus, set_global_event_bus
 from .tui.events import (
-    JOB_SUBMITTED,
-    JOB_STARTED,
-    JOB_COMPLETED,
-    JOB_FAILED,
-    RECEIPT_ADDED,
-    CATALOG_CHANGED,
-    CONFIGURATION_STALE,
+    CatalogChangedEvent,
+    ConfigurationCreatedEvent,
+    ConfigurationRemovedEvent,
+    ConfigurationStaleEvent,
+    ConfigurationUpdatedEvent,
+    JobCompletedEvent,
+    JobFailedEvent,
+    JobStartedEvent,
+    JobSubmittedEvent,
+    ReceiptAddedEvent,
     LOG_MESSAGE,
 )
 from .vsp import session as vsp_session
@@ -473,27 +476,51 @@ class StreamlineApp(App):
 
     # --- Event handling ---
     def _handle_event(self, evt):  # evt is generic from bus
+        # Handle typed events first
+        if isinstance(
+            evt,
+            (
+                JobSubmittedEvent,
+                JobStartedEvent,
+                JobCompletedEvent,
+                JobFailedEvent,
+                ReceiptAddedEvent,
+            ),
+        ):
+            self._mark_refresh('jobs')
+            if isinstance(evt, JobFailedEvent):
+                self._schedule_log_append(f"JOB FAILED {evt.job_id}: {evt.error}", level='ERR')
+            if isinstance(evt, ReceiptAddedEvent) and evt.analysis_key == 'test_noop':
+                receipt = evt.receipt_summary or {}
+                dur = receipt.get('duration_s') or receipt.get('duration') or None
+                if isinstance(dur, (int, float)):
+                    self.last_test_duration = float(dur)
+            return
+
+        if isinstance(
+            evt,
+            (
+                CatalogChangedEvent,
+                ConfigurationCreatedEvent,
+                ConfigurationUpdatedEvent,
+                ConfigurationRemovedEvent,
+            ),
+        ):
+            self._mark_refresh('configs')
+            return
+
+        if isinstance(evt, ConfigurationStaleEvent):
+            if evt.config_id:
+                self.configs_panel.stale_ids.add(evt.config_id)
+            self._mark_refresh('configs')
+            return
+
         et = getattr(evt, 'type', None)
         payload = getattr(evt, 'payload', {})
         if et == LOG_MESSAGE:
             msg = payload.get('message')
             lvl = payload.get('level')
             self._schedule_log_append(msg, level=lvl)
-        elif et in {JOB_SUBMITTED, JOB_STARTED, JOB_COMPLETED, JOB_FAILED, RECEIPT_ADDED}:
-            self._mark_refresh('jobs')
-            if et == JOB_FAILED:
-                self._schedule_log_append(f"JOB FAILED {payload.get('job_id')}: {payload.get('error')}", level='ERR')
-            if et == RECEIPT_ADDED and payload.get('analysis_key') == 'test_noop':
-                receipt = payload.get('receipt') or {}
-                dur = receipt.get('duration_s') or receipt.get('duration') or None
-                if isinstance(dur, (int, float)):
-                    self.last_test_duration = float(dur)
-        elif et in {CATALOG_CHANGED, CONFIGURATION_STALE}:
-            self._mark_refresh('configs')
-        if et == CONFIGURATION_STALE:
-            ids = payload.get('ids') or []
-            self.configs_panel.stale_ids.update(ids)
-            self._mark_refresh('configs')
         # Future: op catalog change events -> self._mark_refresh('ops')
 
     def _schedule_log_append(self, text: str, level: str | None = None):

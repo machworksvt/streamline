@@ -27,7 +27,7 @@ from .core.schema import (
 )
 from .io.config_catalog import load_config_catalog
 from .io.fs import load_config, load_project_def, write_json
-from .io.op_catalog import get_operating_point, load_op_catalog
+from .io.op_catalog import get_operating_point, load_op_catalog, save_operating_point_json
 from .io.results_index import load_result_entries
 from .vsp.contracts import ComputeGeometryTicket, ParasiteDragTicket, StabilityTicket
 from .vsp.configure import apply_configuration
@@ -188,7 +188,7 @@ def create_new_project(projects_root: Path, project_id: str) -> Path:
     write_json(json.loads(proj_def.model_dump_json()), proj / f"{project_id}.json")
     write_json(json.loads(default_mission_json(project_id).model_dump_json()), proj / f"missions/{project_id}_mission.json")
     write_json(json.loads(default_powerplant_json(project_id).model_dump_json()), proj / f"powerplants/{project_id}_pp.json")
-    write_json(json.loads(default_op_json().model_dump_json()), proj / "ops/cruise.json")
+    save_operating_point_json(proj, default_op_json())
     write_json(json.loads(default_config_json().model_dump_json()), proj / "configs/clean.json")
     logger.info(
         "Project scaffolding created",

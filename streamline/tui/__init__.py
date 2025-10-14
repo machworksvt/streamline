@@ -8,7 +8,7 @@ from .events import (
     ResultsIndexUpdated,
     WorkerFailed,
 )
-from .session import ProjectSession
+from .session import ProjectSession, create_project_session
 
 __all__ = [
     "AnalysisJobQueued",
@@ -17,6 +17,7 @@ __all__ = [
     "EventBus",
     "ProjectAssetsRefreshed",
     "ProjectSession",
+    "create_project_session",
     "ResultsIndexUpdated",
     "SessionConfig",
     "SessionJob",

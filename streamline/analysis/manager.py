@@ -30,6 +30,21 @@ from ..vsp.run_utils import dump_json, prepare_results_dir, relativize
 from ..vsp.session import init_context
 from pydantic import BaseModel
 
+try:
+    from ..tui.events import (
+        JobSubmittedEvent,
+        JobStartedEvent,
+        JobFailedEvent,
+        JobCompletedEvent,
+        ReceiptAddedEvent,
+    )
+except Exception:  # pragma: no cover - optional import to avoid hard dependency
+    JobSubmittedEvent = None  # type: ignore
+    JobStartedEvent = None  # type: ignore
+    JobFailedEvent = None  # type: ignore
+    JobCompletedEvent = None  # type: ignore
+    ReceiptAddedEvent = None  # type: ignore
+
 MaterializerFunc = Callable[["AnalysisManager", "AnalysisJob", str, Any, datetime, datetime], Receipt]
 
 # (Lazy event bus import to avoid circular dependency with streamline.tui)
@@ -39,14 +54,6 @@ def _get_event_bus():  # pragma: no cover - small helper
         return get_global_event_bus()
     except Exception:
         return None
-
-# Event type literals (kept in sync with tui.events)
-_EV_JOB_SUBMITTED = "JobSubmitted"
-_EV_JOB_STARTED = "JobStarted"
-_EV_JOB_COMPLETED = "JobCompleted"
-_EV_JOB_FAILED = "JobFailed"
-_EV_RECEIPT_ADDED = "ReceiptAdded"
-
 
 @dataclass
 class AnalysisJob:
@@ -361,15 +368,24 @@ class AnalysisManager:
                 },
             )
             bus = _get_event_bus()
-            if bus:
+            if bus and JobSubmittedEvent is not None:
                 try:
-                    bus.emit(_EV_JOB_SUBMITTED, {
-                        'job_id': job_id,
-                        'analysis_key': analysis_key,
-                        'ticket': ticket.model_dump(mode='json', exclude_none=True) if hasattr(ticket, 'model_dump') else getattr(ticket, '__dict__', {}),
-                        'context': context_extras or {},
-                        'wait_for': list(wait_for or []),
-                    })
+                    ticket_payload = (
+                        ticket.model_dump(mode="json", exclude_none=True)
+                        if hasattr(ticket, "model_dump")
+                        else getattr(ticket, "__dict__", {})
+                    )
+                    bus.publish(
+                        JobSubmittedEvent(
+                            job_id=job_id,
+                            analysis_key=analysis_key,
+                            ticket_payload=ticket_payload,
+                            context=context_extras or {},
+                            wait_for=tuple(job.wait_for),
+                            priority=int(priority),
+                            submitted_at=job.submitted_at,
+                        )
+                    )
                 except Exception:
                     pass
             return job_id
@@ -694,13 +710,15 @@ class AnalysisManager:
         )
 
         bus = _get_event_bus()
-        if bus:
+        if bus and JobStartedEvent is not None:
             try:
-                bus.emit(_EV_JOB_STARTED, {
-                    'job_id': job.job_id,
-                    'analysis_key': job.analysis_key,
-                    'ticket_sha': getattr(job, 'ticket_sha', None),
-                })
+                bus.publish(
+                    JobStartedEvent(
+                        job_id=job.job_id,
+                        analysis_key=job.analysis_key,
+                        started_at=state.started_at or datetime.utcnow(),
+                    )
+                )
             except Exception:
                 pass
 
@@ -731,13 +749,15 @@ class AnalysisManager:
                 "Analysis job failed",
                 context={"job_id": job_id, "analysis": job.analysis_key},
             )
-            if bus:
+            if bus and JobFailedEvent is not None:
                 try:
-                    bus.emit(_EV_JOB_FAILED, {
-                        'job_id': job.job_id,
-                        'analysis_key': job.analysis_key,
-                        'error': str(exc),
-                    })
+                    bus.publish(
+                        JobFailedEvent(
+                            job_id=job.job_id,
+                            analysis_key=job.analysis_key,
+                            error=str(exc),
+                        )
+                    )
                 except Exception:
                     pass
             raise
@@ -781,20 +801,28 @@ class AnalysisManager:
             },
         )
 
-        if bus:
+        receipt_summary = self._receipt_summary(receipt) if receipt is not None else None
+        if bus and JobCompletedEvent is not None:
             try:
-                bus.emit(_EV_JOB_COMPLETED, {
-                    'job_id': job.job_id,
-                    'analysis_key': job.analysis_key,
-                    'ticket_sha': getattr(job, 'ticket_sha', None),
-                })
-                if receipt:
-                    bus.emit(_EV_RECEIPT_ADDED, {
-                        'job_id': job.job_id,
-                        'analysis_key': job.analysis_key,
-                        'ticket_sha': getattr(job, 'ticket_sha', None),
-                        'receipt': self._receipt_summary(receipt),
-                    })
+                bus.publish(
+                    JobCompletedEvent(
+                        job_id=job.job_id,
+                        analysis_key=job.analysis_key,
+                        ticket_sha=ticket_sha,
+                        started_at=started_at,
+                        ended_at=ended,
+                        receipt_summary=receipt_summary,
+                    )
+                )
+                if receipt and ReceiptAddedEvent is not None:
+                    bus.publish(
+                        ReceiptAddedEvent(
+                            job_id=job.job_id,
+                            analysis_key=job.analysis_key,
+                            ticket_sha=ticket_sha,
+                            receipt_summary=receipt_summary,
+                        )
+                    )
             except Exception:
                 pass
 

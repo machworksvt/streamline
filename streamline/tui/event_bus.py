@@ -5,7 +5,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Callable, Dict, Iterable, Optional, Type, TypeVar
 
-from .events import Event, CATALOG_CHANGED, CONFIGURATION_CREATED, CONFIGURATION_STALE, build_event
+from .events import Event, build_event
 
 EventT = TypeVar("EventT", bound=Event)
 
@@ -53,8 +53,17 @@ class EventBus:
             for registered_type, callbacks in self._subscribers.items():
                 if issubclass(event_type, registered_type):
                     listeners.update(callbacks)
+            any_callbacks = list(self._any_subscribers.values())
         for callback in listeners.values():
-            callback(event)
+            try:
+                callback(event)
+            except Exception:
+                pass
+        for callback in any_callbacks:
+            try:
+                callback(event)
+            except Exception:
+                pass
 
     def subscribe(self, event_type: Type[EventT], callback: Callable[[EventT], None]) -> Subscription:
         """Register *callback* for *event_type* and return a subscription handle."""
@@ -94,23 +103,7 @@ class EventBus:
                 self._subscribers.pop(event_type, None)
 
     def emit(self, event_type: str, payload: dict | None = None):
+        """Legacy helper for string-based events."""
+
         evt = build_event(event_type, payload)
-        # dispatch to class-based subscribers
-        listeners: Dict[str, Callable[[Event], None]] = {}
-        with self._lock:
-            for registered_type, callbacks in self._subscribers.items():
-                if issubclass(Event, registered_type) or registered_type is Event:  # Event base
-                    listeners.update(callbacks)
-            any_callbacks = list(self._any_subscribers.values())
-        # fire class specific
-        for cb in listeners.values():
-            try:
-                cb(evt)
-            except Exception:
-                pass
-        # fire any-subscribers
-        for cb in any_callbacks:
-            try:
-                cb(evt)
-            except Exception:
-                pass
+        self.publish(evt)

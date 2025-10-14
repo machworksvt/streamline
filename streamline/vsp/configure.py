@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import hashlib
+import json
+from datetime import datetime, timezone
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple, Any, Sequence
+from typing import Dict, Iterable, List, Optional, Tuple, Any, Sequence
 from pathlib import Path
 from contextlib import contextmanager
 
@@ -10,6 +13,11 @@ from .sets import list_sets
 from .util import apply_udp_overrides
 from ..io import fs as _fs
 from . import session as _session  # new import for proper VSP session access
+from ..tui.events import (
+    CatalogChangedEvent,
+    ConfigurationCreatedEvent,
+    ConfigurationStaleEvent,
+)
 
 try:  # Replace direct import with session-based resolution first
     def _get_vsp_module():
@@ -44,6 +52,24 @@ class AppliedConfiguration:
     parm_overrides: Dict[str, float]
 
 
+@dataclass
+class ModeGroupSetting:
+    group_id: str
+    group_name: str
+    setting_id: str
+    setting_name: str
+
+
+@dataclass
+class ModeDetails:
+    mode_id: str
+    mode_name: Optional[str]
+    use_mode_flag: Optional[bool]
+    normal_set: Optional[int]
+    degen_set: Optional[int]
+    group_settings: List[ModeGroupSetting]
+
+
 def _safe(callable_name: str, *args, default=None):
     """Call a vsp function if available; return default on failure."""
     if vsp is None:
@@ -55,6 +81,30 @@ def _safe(callable_name: str, *args, default=None):
         return fn(*args)
     except Exception:  # pragma: no cover
         return default
+
+
+def _resolve_group_name(group_id: Optional[str]) -> Optional[str]:
+    if not group_id:
+        return None
+    return _safe("GetGroupName", group_id, default=group_id) or group_id
+
+
+def _resolve_setting_name(setting_id: Optional[str]) -> Optional[str]:
+    if not setting_id:
+        return None
+    return _safe("GetSettingName", setting_id, default=setting_id) or setting_id
+
+
+def _clone_model(value):
+    if value is None:
+        return None
+    model_copy = getattr(value, "model_copy", None)
+    if callable(model_copy):
+        return model_copy(deep=True)
+    copy_fn = getattr(value, "copy", None)
+    if callable(copy_fn):
+        return copy_fn()
+    return value
 
 
 def _match_set_index(vsp, candidate: Optional[str]) -> Optional[int]:
@@ -271,6 +321,91 @@ def list_modes() -> List[Dict[str, Any]]:
     return modes
 
 
+def _mode_group_pairs(mode_id: str) -> List[Tuple[Optional[str], Optional[str]]]:
+    groups = list(_safe("ModeGetAllGroups", mode_id, default=[]) or [])
+    settings = list(_safe("ModeGetAllSettings", mode_id, default=[]) or [])
+    pairs: List[Tuple[Optional[str], Optional[str]]] = []
+    if groups and settings and len(groups) == len(settings):
+        pairs = list(zip(groups, settings))
+    else:
+        count = max(len(groups), len(settings))
+        if count == 0:
+            count = int(_safe("ModeGetNumGroupSettings", mode_id, default=0) or 0)
+        idx = 0
+        while idx < count or count == 0:
+            gid = groups[idx] if idx < len(groups) else _safe("ModeGetGroup", mode_id, idx, default=None)
+            sid = settings[idx] if idx < len(settings) else _safe("ModeGetSetting", mode_id, idx, default=None)
+            if gid is None and sid is None:
+                if count == 0:
+                    break
+                idx += 1
+                continue
+            pairs.append((gid, sid))
+            idx += 1
+        if not pairs:
+            # Attempt until failure, but cap iterations to prevent infinite loops
+            for idx in range(0, 32):
+                gid = _safe("ModeGetGroup", mode_id, idx, default=None)
+                sid = _safe("ModeGetSetting", mode_id, idx, default=None)
+                if gid is None and sid is None:
+                    break
+                pairs.append((gid, sid))
+    return [(g, s) for g, s in pairs if g or s]
+
+
+def get_mode_group_settings(mode_id: str, *, resolve_names: bool = True) -> List[ModeGroupSetting]:
+    entries: List[ModeGroupSetting] = []
+    for gid, sid in _mode_group_pairs(mode_id):
+        group_name = _resolve_group_name(gid) if resolve_names else gid
+        setting_name = _resolve_setting_name(sid) if resolve_names else sid
+        entries.append(
+            ModeGroupSetting(
+                group_id=gid or "",
+                group_name=group_name or (gid or ""),
+                setting_id=sid or "",
+                setting_name=setting_name or (sid or ""),
+            )
+        )
+    return entries
+
+
+def get_mode_details(mode_id: str, *, resolve_names: bool = True) -> Optional[ModeDetails]:
+    if not mode_id:
+        return None
+    mode_entry = next((m for m in list_modes() if m.get("mode_id") == mode_id), None)
+    mode_name = mode_entry.get("name") if mode_entry else None
+    use_flag = _safe("GetModeUseFlag", mode_id, default=None)
+    if use_flag is None:
+        use_flag = _safe("GetUseModeFlag", default=None)
+    normal_set = _safe("ModeGetSet", mode_id, default=None)
+    if normal_set is None:
+        normal_set = _safe("GetModeSet", mode_id, default=None)
+    degen_set = _safe("ModeGetSubSurfaceSet", mode_id, default=None)
+    if degen_set is None:
+        degen_set = _safe("GetModeDegenSet", mode_id, default=None)
+    group_settings = get_mode_group_settings(mode_id, resolve_names=resolve_names)
+    return ModeDetails(
+        mode_id=mode_id,
+        mode_name=mode_name,
+        use_mode_flag=bool(use_flag) if use_flag is not None else None,
+        normal_set=normal_set,
+        degen_set=degen_set,
+        group_settings=group_settings,
+    )
+
+
+def list_mode_details(*, resolve_names: bool = True) -> List[ModeDetails]:
+    details: List[ModeDetails] = []
+    for entry in list_modes():
+        mid = entry.get("mode_id")
+        if not mid:
+            continue
+        detail = get_mode_details(mid, resolve_names=resolve_names)
+        if detail:
+            details.append(detail)
+    return details
+
+
 def get_active_mode_id() -> Optional[str]:
     return _safe("GetActiveModeID", default=None)
 
@@ -368,8 +503,52 @@ def save_configuration_json(project_root: Path, configuration: Configuration) ->
     cfg_dir = project_root / "configs"
     cfg_dir.mkdir(parents=True, exist_ok=True)
     path = cfg_dir / f"{configuration.config_id}.json"
-    _fs.write_json(path, configuration.model_dump(mode="json", exclude_none=True))
+    payload = configuration.model_dump(mode="json", exclude_none=True)
+    _fs.write_json(payload, path)
+    checksum = hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    _save_configuration_metadata(path, configuration, checksum=checksum)
     return path
+
+
+def _config_metadata_path(config_path: Path) -> Path:
+    return config_path.with_suffix(config_path.suffix + ".meta")
+
+
+def _save_configuration_metadata(
+    config_path: Path,
+    configuration: Configuration,
+    *,
+    checksum: str,
+    captured_at: Optional[datetime] = None,
+) -> Path:
+    meta_path = _config_metadata_path(config_path)
+    meta_payload: Dict[str, Any] = {
+        "metadata_version": 1,
+        "config_id": configuration.config_id,
+        "captured_at": (captured_at or datetime.now(timezone.utc)).isoformat(),
+        "checksum_sha256": checksum,
+        "mode_id": configuration.mode.mode_id if configuration.mode else None,
+        "mode_use_flag": configuration.mode.use_mode_flag if configuration.mode else None,
+        "preset_pairs": [
+            [ref.group_name, ref.setting_name] for ref in configuration.var_presets
+        ],
+        "geom_set_index": configuration.geom_set_index,
+        "geom_set_name": configuration.geom_set_name,
+    }
+    _fs.write_json(meta_payload, meta_path)
+    return meta_path
+
+
+def load_configuration_metadata(config_path: Path) -> Dict[str, Any]:
+    meta_path = _config_metadata_path(config_path)
+    if not meta_path.exists():
+        return {}
+    try:
+        return json.loads(meta_path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
 
 
 def register_current_configuration(project_root: Path, config_id: str, preferred_set: Optional[str] = None) -> Configuration:
@@ -379,6 +558,115 @@ def register_current_configuration(project_root: Path, config_id: str, preferred
     model = build_configuration_model(config_id, snapshot)
     save_configuration_json(project_root, model)
     return model
+
+
+def configuration_from_mode(
+    config_id: str,
+    mode_id: str,
+    *,
+    geom_set_name: Optional[str] = None,
+    geom_set_index: Optional[int] = None,
+    include_presets: bool = True,
+    udp_overrides: Optional[Dict[str, float]] = None,
+    runtime_overrides: Optional[Dict[str, float]] = None,
+    notes: Optional[str] = None,
+    use_mode_flag: Optional[bool] = None,
+) -> Configuration:
+    if vsp is None:
+        raise ConfigurationIntrospectionError("OpenVSP bindings not available; cannot build configuration from mode.")
+    details = get_mode_details(mode_id)
+    if details is None:
+        raise ConfigurationIntrospectionError(f"Mode '{mode_id}' not available in current OpenVSP session.")
+    available_sets = list_vsp_sets()
+    if geom_set_name is None and geom_set_index is None:
+        if details.normal_set is not None:
+            geom_set_index = details.normal_set
+            if 0 <= geom_set_index < len(available_sets):
+                geom_set_name = available_sets[geom_set_index]
+        elif available_sets:
+            geom_set_name = available_sets[0]
+            geom_set_index = 0
+    if geom_set_name is not None and geom_set_index is None:
+        if available_sets and geom_set_name in available_sets:
+            geom_set_index = available_sets.index(geom_set_name)
+    if geom_set_index is not None and geom_set_name is None and available_sets:
+        if 0 <= geom_set_index < len(available_sets):
+            geom_set_name = available_sets[geom_set_index]
+
+    presets: List[VarPresetRef] = []
+    if include_presets:
+        for item in details.group_settings:
+            if item.group_name and item.setting_name:
+                presets.append(
+                    VarPresetRef(
+                        group_name=item.group_name,
+                        setting_name=item.setting_name,
+                    )
+                )
+    mode_ref = ModeRef(
+        mode_id=details.mode_id,
+        mode_name=details.mode_name,
+        use_mode_flag=use_mode_flag if use_mode_flag is not None else (details.use_mode_flag if details.use_mode_flag is not None else True),
+    )
+    return Configuration(
+        config_id=config_id,
+        mode=mode_ref,
+        geom_set_index=geom_set_index,
+        geom_set_name=geom_set_name,
+        var_presets=presets,
+        udp_overrides=dict(udp_overrides or {}),
+        runtime_overrides=dict(runtime_overrides or {}),
+        notes=notes or f"Generated from OpenVSP mode '{details.mode_name or details.mode_id}'",
+    )
+
+
+def derive_configuration(
+    base: Configuration,
+    new_config_id: str,
+    *,
+    udp_overrides: Optional[Dict[str, float]] = None,
+    runtime_overrides: Optional[Dict[str, float]] = None,
+    additional_presets: Optional[Iterable[VarPresetRef]] = None,
+    notes: Optional[str] = None,
+    mode_override: Optional[ModeRef] = None,
+) -> Configuration:
+    presets: List[VarPresetRef] = []
+    for ref in base.var_presets:
+        presets.append(_clone_model(ref))
+    if additional_presets:
+        existing = {(ref.group_name, ref.setting_name) for ref in presets}
+        for ref in additional_presets:
+            key = (ref.group_name, ref.setting_name)
+            if key not in existing:
+                presets.append(_clone_model(ref))
+                existing.add(key)
+
+    udp = dict(base.udp_overrides)
+    if udp_overrides:
+        udp.update(udp_overrides)
+    runtime = dict(base.runtime_overrides)
+    if runtime_overrides:
+        runtime.update(runtime_overrides)
+
+    mode_ref = _clone_model(mode_override) if mode_override is not None else _clone_model(base.mode)
+
+    control_groups = [_clone_model(item) for item in base.control_surface_groups]
+    hinges = [_clone_model(item) for item in base.hinges]
+    payloads = [_clone_model(item) for item in base.payloads_toggle]
+
+    return Configuration(
+        config_id=new_config_id,
+        mode=mode_ref,
+        geom_set_index=base.geom_set_index,
+        geom_set_name=base.geom_set_name,
+        var_presets=presets,
+        control_surface_groups=control_groups,
+        hinges=hinges,
+        payloads_toggle=payloads,
+        udp_overrides=udp,
+        runtime_overrides=runtime,
+        notes=notes or base.notes,
+    )
 
 
 # Validation & creation helpers (new)
@@ -483,12 +771,12 @@ def revalidate_existing_configurations(configs: Sequence[Configuration]) -> Dict
 # --- Thread-safe wrappers & event emission (new) ---
 
 # Best-effort event emission (no-op if EventBus absent)
-def _emit_event(event_type: str, payload: Dict[str, Any]):  # pragma: no cover
+def _publish_event(event):  # pragma: no cover
     try:
         from ..tui.event_bus import get_global_event_bus  # type: ignore
         bus = get_global_event_bus()
         if bus:
-            bus.emit(event_type, payload)
+            bus.publish(event)
     except Exception:
         pass
 
@@ -518,8 +806,20 @@ def register_configuration_with_lock(project_root: Path, config_id: str, *, pref
             errs = validate_configuration_links(cfg)
             if errs:
                 raise ConfigurationIntrospectionError("Validation errors: " + "; ".join(errs))
-    _emit_event("CatalogChanged", {"kind": "config", "config_id": cfg.config_id})
-    _emit_event("ConfigurationCreated", {"config_id": cfg.config_id})
+    _publish_event(
+        CatalogChangedEvent(
+            kind="config",
+            identifiers=(cfg.config_id,),
+            project=str(project_root),
+        )
+    )
+    _publish_event(
+        ConfigurationCreatedEvent(
+            config_id=cfg.config_id,
+            project=str(project_root),
+            source="snapshot",
+        )
+    )
     return cfg
 
 
@@ -535,8 +835,20 @@ def register_configuration_from_active_mode_with_lock(project_root: Path, config
         )
         if validate:
             assert_configuration_valid(cfg)
-    _emit_event("CatalogChanged", {"kind": "config", "config_id": cfg.config_id})
-    _emit_event("ConfigurationCreated", {"config_id": cfg.config_id, "from": "mode"})
+    _publish_event(
+        CatalogChangedEvent(
+            kind="config",
+            identifiers=(cfg.config_id,),
+            project=str(project_root),
+        )
+    )
+    _publish_event(
+        ConfigurationCreatedEvent(
+            config_id=cfg.config_id,
+            project=str(project_root),
+            source="mode",
+        )
+    )
     return cfg
 
 
@@ -545,5 +857,11 @@ def revalidate_existing_configs_with_lock(configs: Sequence[Configuration], anal
         result = revalidate_existing_configurations(configs)
     stale = {cid: errs for cid, errs in result.items() if errs}
     if stale:
-        _emit_event("ConfigurationStale", {"count": len(stale), "ids": list(stale.keys())})
+        for cfg_id, errs in stale.items():
+            _publish_event(
+                ConfigurationStaleEvent(
+                    config_id=cfg_id,
+                    errors=tuple(errs),
+                )
+            )
     return result

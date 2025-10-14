@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 import time
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
-# Core event type strings (central source)
+# Legacy string identifiers (maintained for backward compatibility only)
 CATALOG_CHANGED = "CatalogChanged"
 CONFIGURATION_CREATED = "ConfigurationCreated"
 CONFIGURATION_UPDATED = "ConfigurationUpdated"
@@ -112,3 +112,93 @@ class WorkerFailed(SessionEvent):
     """Raised when a background worker encounters an unhandled exception."""
     message: str = ""
     details: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Generic manager-level events (preferred over raw string identifiers)
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class ManagerEvent(Event):
+    """Base class for manager-centric events that are not session-scoped."""
+
+
+@dataclass(frozen=True)
+class JobEvent(ManagerEvent):
+    job_id: str = ""
+    analysis_key: str = ""
+
+
+@dataclass(frozen=True)
+class JobSubmittedEvent(JobEvent):
+    ticket_payload: Dict[str, Any] = field(default_factory=dict)
+    context: Dict[str, Any] = field(default_factory=dict)
+    wait_for: Tuple[str, ...] = tuple()
+    priority: int = 0
+    submitted_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass(frozen=True)
+class JobStartedEvent(JobEvent):
+    started_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass(frozen=True)
+class JobFailedEvent(JobEvent):
+    error: str = ""
+    failed_at: datetime = field(default_factory=_utcnow)
+
+
+@dataclass(frozen=True)
+class JobCompletedEvent(JobEvent):
+    ticket_sha: Optional[str] = None
+    started_at: Optional[datetime] = None
+    ended_at: datetime = field(default_factory=_utcnow)
+    receipt_summary: Optional[Dict[str, Any]] = None
+
+
+@dataclass(frozen=True)
+class ReceiptAddedEvent(JobEvent):
+    ticket_sha: Optional[str] = None
+    receipt_summary: Optional[Dict[str, Any]] = None
+
+
+# ---------------------------------------------------------------------------
+# Catalog / configuration events
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class CatalogEvent(Event):
+    project: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class CatalogChangedEvent(CatalogEvent):
+    kind: str = ""
+    identifiers: Tuple[str, ...] = tuple()
+    reason: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class ConfigurationEvent(CatalogEvent):
+    config_id: str = ""
+
+
+@dataclass(frozen=True)
+class ConfigurationCreatedEvent(ConfigurationEvent):
+    source: Optional[str] = None  # e.g. "mode", "snapshot"
+
+
+@dataclass(frozen=True)
+class ConfigurationUpdatedEvent(ConfigurationEvent):
+    changes: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class ConfigurationRemovedEvent(ConfigurationEvent):
+    reason: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class ConfigurationStaleEvent(ConfigurationEvent):
+    errors: Tuple[str, ...] = tuple()
