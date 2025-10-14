@@ -53,23 +53,9 @@ jobs:
           Remove-Item $vspZip
           $vspPython = Join-Path $vspRoot "python"
           $vspBin = Join-Path $vspRoot "bin"
-          $packages = @(
-            "vsp_airfoils",
-            "utilities",
-            "degen_geom",
-            "openvsp_config",
-            "openvsp",
-            "CHARM",
-            "AvlPy",
-            "pyPMARC"
-          )
-          foreach ($pkg in $packages) {
-            $pkgPath = Join-Path $vspPython $pkg
-            Write-Host "Installing OpenVSP package $pkgPath"
-            micromamba run -n streamline python -m pip install -e $pkgPath
-          }
-          Add-Content $env:GITHUB_PATH $vspBin
-          Add-Content $env:GITHUB_ENV "PYTHONPATH=$vspPython"
+          micromamba run -n streamline python -m pip install -r (Join-Path $vspPython "requirements.txt")
+          Add-Content -Path $env:GITHUB_PATH -Value $vspBin
+          Add-Content -Path $env:GITHUB_ENV -Value "PYTHONPATH=$vspPython"
           micromamba run -n streamline python -c "import openvsp; print('OpenVSP version:', openvsp.GetVSPVersion())"
 
       - name: Run tests
@@ -81,3 +67,4 @@ jobs:
         if: always()
         run: |
           echo "(Placeholder for future artifact upload)"
+
