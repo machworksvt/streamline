@@ -1,8 +1,8 @@
 """VSP integration public API.
 
-Use import_vsp() to obtain a validated OpenVSP module object with required
-symbols grafted if necessary.
+`import_vsp()` mirrors the manual workflow: it prepares the environment and
+returns the imported `openvsp` module.
 """
-from .session import import_vsp  # canonical
+from .session import import_vsp
 
 __all__ = ["import_vsp"]

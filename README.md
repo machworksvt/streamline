@@ -1,12 +1,12 @@
 # Streamline Environment Setup
 
-Streamline can be developed on Windows, macOS, or Linux using a standard Python 3.11 toolchain. The only vendor dependency is [OpenVSP](https://openvsp.org), which Streamline now downloads on demand via a cross-platform installer.
+Streamline can be developed on Windows, macOS, or Linux using a standard Python 3.11 toolchain. The only vendor dependency is [OpenVSP](https://openvsp.org); you install it manually using the bindings that ship with the official download.
 
 ## Environment setup at a glance
 
 1. **Install Python packages** – `pip install -r requirements.txt` (or use `environment.yml` with Conda).
-2. **Provision OpenVSP** – run `python -m tools.install_openvsp` once per machine/CI worker. The runtime is cached under `~/.cache/openvsp/<version>` by default, so repeated test runs are fast.
-3. **Run the test suite** – install the real OpenVSP runtime for full coverage. A lightweight stub is used automatically when OpenVSP is unavailable; set `STREAMLINE_ALLOW_VSP_STUB=0` to require the real bindings (as CI does).
+2. **Provision OpenVSP** – download the official OpenVSP package for your platform, extract it adjacent to this repository, and run the upstream helper (see below).
+3. **Run the test suite** – full coverage requires the real OpenVSP bindings. When the runtime is missing the test suite falls back to a stub unless you set `STREAMLINE_REQUIRE_REAL_VSP=1`.
 
 The sections below expand each step with additional context and troubleshooting tips.
 
@@ -27,61 +27,32 @@ pip install -r requirements.txt
 
 ## 2. Install the OpenVSP runtime
 
-Run the installer module from the repository root (the command is idempotent and safe to re-run):
+1. Download the platform archive from the [OpenVSP downloads page](https://openvsp.org/download.php).
+2. Extract it next to this repository so you have a folder such as `OpenVSP-3.46.0-win64/`.
+3. Run the helper inside the package to install the Python bindings. On Windows that is:
 
-```bash
-python -m tools.install_openvsp
-```
+   ```powershell
+   cd OpenVSP-3.46.0-win64/python
+   ./setup.ps1
+   ```
 
-The installer will:
+   On Linux/macOS use the provided shell script:
 
-* Read `tools/openvsp.json` to select the correct OpenVSP archive for your OS.
-* Download and unpack the runtime into `${STREAMLINE_OPENVSP_HOME:-~/.cache/openvsp}`.
-* Drop an `openvsp-runtime.pth` file into the active environment so `import openvsp` works without tweaking `PYTHONPATH`.
-* Cache the extracted payload, so subsequent executions reuse the existing runtime unless you pass `--force`.
+   ```bash
+   cd OpenVSP-3.46.0-linux/python
+   ./setup.sh
+   ```
 
-> **Python version compatibility**
->
-> The upstream OpenVSP project currently publishes Python bindings built for **Python 3.11** across Windows, Linux, and macOS. The installer now refuses to run under interpreters with a different major/minor version (for example Python 3.12) because the native modules cannot be imported there. If you are using Conda or `pyenv`, create a Python 3.11 environment before invoking the installer:
->
-> ```powershell
-> conda create -n streamline python=3.11
-> conda activate streamline
-> python -m tools.install_openvsp
-> ```
->
-> or, with `pyenv`/virtualenv:
->
-> ```bash
-> pyenv install 3.11.9
-> pyenv virtualenv 3.11.9 streamline
-> pyenv activate streamline
-> python -m tools.install_openvsp
-> ```
+4. Activate your Streamline environment and verify the bindings:
 
-> **Conda environments and the user site**
->
-> Conda disables the "user site-packages" directory by default (it sets `PYTHONNOUSERSITE=1`). If the installer cannot write the `.pth` file into the environment because it is read-only, it falls back to the user site and will now refuse to continue when the interpreter ignores that location. It is safe to enable the user site for a Conda environment; run `conda env config vars set PYTHONNOUSERSITE=0` (or unset the variable in your shell) and reactivate the environment before re-running the installer. No other Conda setup changes are required.
+   ```powershell
+   conda activate streamline
+   python -c "import openvsp; print(openvsp.GetVSPVersion())"
+   ```
 
-On success it prints the installation path and any directories that should be added to your `PATH`/`LD_LIBRARY_PATH`. In CI you can capture this information with `--print-json`:
+If you keep the extracted directory beside the repository (the same parent folder) and run the upstream setup script inside your active environment, `import openvsp` should work without additional path tweaks.
 
-```bash
-python -m tools.install_openvsp --print-json
-```
-
-### Optional flags
-
-* `--platform {windows,linux,macos}` – override auto-detected platform.
-* `--cache-root <path>` – install somewhere other than the default cache.
-* `--force` – re-download even if the requested version already exists.
-* `--no-pth` – skip writing the `.pth` helper (useful inside read-only environments).
-* `--export <path>` – save the installation manifest as JSON for automation.
-
-## 3. Configure environment variables (if needed)
-
-The Python bindings usually work out-of-the-box once the `.pth` file is present. If you need to run the OpenVSP GUI or downstream tooling, add the reported directories to your `PATH` (Windows) or `LD_LIBRARY_PATH`/`DYLD_LIBRARY_PATH` (Linux/macOS). The installer output includes everything you need. In GitHub Actions we export the values that `--print-json` returns, so the workflow matches the local developer experience.
-
-## 4. Running tests
+## 3. Running tests
 
 By default the test suite falls back to an in-memory stub if the OpenVSP runtime is unavailable. To require the real bindings (matching CI), opt-in explicitly:
 
@@ -92,12 +63,12 @@ pytest
 
 When the variable is **not** set, tests skip OpenVSP-dependent cases if the runtime is missing.
 
-## Legacy PowerShell bootstrapper
+## PowerShell convenience script
 
-Windows developers who prefer the existing PowerShell workflow can still run:
+Windows developers can run:
 
 ```powershell
 ./setup_streamline.ps1
 ```
 
-The script now delegates the OpenVSP download to `python -m tools.install_openvsp`, then provisions the Conda environment as before. See the script for additional switches such as `-Force`.
+The script creates or updates the Conda environment, installs the Python requirements, downloads the Windows OpenVSP package, extracts it beside the repository, and runs `pip install -r requirements-dev.txt` inside the package’s `python/` directory.

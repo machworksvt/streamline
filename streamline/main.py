@@ -34,6 +34,7 @@ from .vsp.configure import apply_configuration
 from .vsp.operating_point import apply_operating_point
 from .vsp.session import lock_gui, unlock_gui
 from .vsp.sets import list_sets, set_membership_counts, choose_populated_set
+from .vsp import configure as vsp_config
 
 
 logger = get_logger(__name__)
@@ -80,6 +81,20 @@ def repo_root_from_here() -> Path:
 def ensure_dir(path: Path) -> Path:
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def _parse_kv_pairs(pairs):
+    result = {}
+    for p in pairs or []:
+        if '=' not in p:
+            raise argparse.ArgumentTypeError(f"Override '{p}' must be key=value")
+        k, v = p.split('=', 1)
+        try:
+            fv = float(v)
+        except ValueError:
+            raise argparse.ArgumentTypeError(f"Value for '{k}' must be float convertible")
+        result[k.strip()] = fv
+    return result
 
 
 # -------------------------
@@ -521,328 +536,100 @@ def smoke_run(
             context={"path": str(results_root / parasite_receipt.artifact_dir)},
         )
 
+
 # -------------------------
 # CLI entry point
 # -------------------------
 
-def main(argv: Optional[list[str]] = None) -> int:
-    parser = argparse.ArgumentParser(
-        prog="streamline",
-        description="Streamline project bootstrap & analysis harness",
-    )
-    parser.add_argument(
-        "--log-level",
-        default=os.environ.get("STREAMLINE_LOG_LEVEL", "INFO"),
-        help="Logging level (default: INFO or STREAMLINE_LOG_LEVEL env)",
-    )
-    parser.add_argument(
-        "--log-file",
-        default=os.environ.get("STREAMLINE_LOG_FILE"),
-        help="Optional log file path (default: STREAMLINE_LOG_FILE env)",
-    )
-    sub = parser.add_subparsers(dest="cmd", required=True)
+def add_configs_subcommands(subparsers):  # extend existing configs command group
+    parser = subparsers.add_parser('configs', help='List or capture configurations')
+    actions = parser.add_subparsers(dest='configs_action')
 
-    p_init = sub.add_parser("init", help="Create a new project scaffolding and a matching .vsp3")
-    p_init.add_argument("project_id")
-    p_init.add_argument(
-        "--projects-root",
-        default=str(repo_root_from_here() / "projects"),
-        help="Root folder for projects/ (default: ./projects)",
-    )
+    list_p = actions.add_parser('list', help='List configurations')
+    list_p.add_argument('project_id')
 
-    p_gui = sub.add_parser("gui", help="Open the OpenVSP GUI in the current environment")
+    cap_p = actions.add_parser('capture', help='Capture configuration from current VSP state (mode/presets optional)')
+    cap_p.add_argument('project_id')
+    cap_p.add_argument('config_id')
+    cap_p.add_argument('--set', dest='preferred_set')
+    cap_p.add_argument('--no-validate', action='store_true')
 
-    p_configs = sub.add_parser("configs", help="List configurations available for a project")
-    p_configs.add_argument("project_id")
-    p_configs.add_argument(
-        "--projects-root",
-        default=str(repo_root_from_here() / "projects"),
-        help="Root folder for projects/ (default: ./projects)",
-    )
+    mode_p = actions.add_parser('capture-mode', help='Capture configuration directly from active Mode')
+    mode_p.add_argument('project_id')
+    mode_p.add_argument('config_id')
+    mode_p.add_argument('--no-presets', action='store_true')
+    mode_p.add_argument('--udp', nargs='*', default=[], help='UDP overrides k=v')
+    mode_p.add_argument('--runtime', nargs='*', default=[], help='Runtime overrides k=v')
+    mode_p.add_argument('--no-validate', action='store_true')
 
-    p_ops = sub.add_parser("ops", help="List operating points available for a project")
-    p_ops.add_argument("project_id")
-    p_ops.add_argument(
-        "--projects-root",
-        default=str(repo_root_from_here() / "projects"),
-        help="Root folder for projects/ (default: ./projects)",
-    )
+    return parser
 
-    p_results = sub.add_parser("results", help="List recorded analysis runs for a project")
-    p_results.add_argument("project_id")
-    p_results.add_argument(
-        "--projects-root",
-        default=str(repo_root_from_here() / "projects"),
-        help="Root folder for projects/ (default: ./projects)",
-    )
-    p_results.add_argument("--analysis", default=None, help="Filter by analysis key (optional)")
-    p_results.add_argument("--op", default=None, help="Filter by operating point ID (optional)")
-    p_results.add_argument("--limit", type=int, default=10, help="Maximum entries to show (default: 10)")
 
-    p_cache = sub.add_parser("cache", help="Inspect or clear cached analysis receipts")
-    p_cache.add_argument("project_id")
-    p_cache.add_argument(
-        "--projects-root",
-        default=str(repo_root_from_here() / "projects"),
-        help="Root folder for projects/ (default: ./projects)",
-    )
-    cache_sub = p_cache.add_subparsers(dest="cache_cmd", required=True)
-
-    p_cache_list = cache_sub.add_parser("list", help="List cached analysis receipts")
-    p_cache_list.add_argument("--analysis", action="append", dest="analysis", default=None, help="Filter by analysis key (repeatable)")
-    p_cache_list.add_argument("--ticket", action="append", dest="ticket", default=None, help="Filter by ticket SHA256 (repeatable)")
-    p_cache_list.add_argument("--include-deferred", action="store_true", help="Include cache entries pending registration")
-
-    p_cache_clear = cache_sub.add_parser("clear", help="Clear cached analysis receipts")
-    p_cache_clear.add_argument("--analysis", action="append", dest="analysis", default=None, help="Filter by analysis key (repeatable)")
-    p_cache_clear.add_argument("--ticket", action="append", dest="ticket", default=None, help="Filter by ticket SHA256 (repeatable)")
-    p_cache_clear.add_argument("--keep-results", action="store_true", help="Retain existing artifacts and results index entries")
-
-    p_smoke = sub.add_parser("smoke", help="Create/open project, then run VSPAERO smoke analyses")
-    p_smoke.add_argument("project_id")
-    p_smoke.add_argument(
-        "--projects-root",
-        default=str(repo_root_from_here() / "projects"),
-        help="Root folder for projects/ (default: ./projects)",
-    )
-    p_smoke.add_argument("--set", dest="set_name", default="baseline", help="OpenVSP Set to analyze")
-    p_smoke.add_argument("--config", dest="config_id", default=None, help="Configuration ID to apply")
-    p_smoke.add_argument("--op", dest="op_id", default=None, help="Operating point ID to apply")
-    p_smoke.add_argument("--mach", type=float, default=None, help="Override Mach number if desired")
-    p_smoke.add_argument("--alpha-deg", type=float, default=None, help="Angle of attack override (deg)")
-
-    args = parser.parse_args(argv)
-
-    log_file = Path(args.log_file).expanduser().resolve() if args.log_file else None
-    setup_logging(LoggingConfig(level=args.log_level, logfile=log_file))
-    cli_logger = logger.bind(command=args.cmd)
-
-    try:
-        if args.cmd == "init":
-            projects_root = ensure_dir(Path(args.projects_root))
-            proj = create_new_project(projects_root, args.project_id)
-            manager = AnalysisManager(open_gui=False)
-            vsp = manager.vsp
-            if vsp is None:
-                raise StreamlineError(
-                    "Failed to initialize OpenVSP context",
-                    context={"command": "init"},
-                )
-            with manager.vsp_guard():
-                create_empty_vsp3(vsp, proj / f"{args.project_id}.vsp3")
-            cli_logger.info(
-                "Project scaffold created",
-                context={
-                    "project_id": args.project_id,
-                    "project_path": str(proj),
-                    "vsp_model": str(proj / f"{args.project_id}.vsp3"),
-                },
-            )
-            return 0
-
-        if args.cmd == "gui":
-            manager = AnalysisManager(open_gui=True)
-            vsp = manager.vsp
-            if vsp is None:
-                raise StreamlineError(
-                    "Failed to initialize OpenVSP context",
-                    context={"command": "gui"},
-                )
-            cli_logger.info("OpenVSP GUI launched")
-            return 0
-
-        if args.cmd == "configs":
-            projects_root = ensure_dir(Path(args.projects_root))
-            proj = ensure_dir(projects_root / args.project_id)
-            catalog = load_config_catalog(proj)
-            if not catalog:
-                cli_logger.warning(
-                    "No configurations found",
-                    context={"project_id": args.project_id},
-                )
-            else:
-                for summary in catalog:
-                    cli_logger.info(
-                        "Configuration",
-                        context={
-                            "project_id": args.project_id,
-                            "config_id": summary.config_id,
-                            "mode": summary.mode_id or "(none)",
-                            "set": summary.set_name if summary.set_name is not None else summary.set_index,
-                            "has_presets": summary.has_presets,
-                            "notes": summary.notes or None,
-                        },
-                    )
-            return 0
-
-        if args.cmd == "ops":
-            projects_root = ensure_dir(Path(args.projects_root))
-            proj = ensure_dir(projects_root / args.project_id)
-            catalog = load_op_catalog(proj)
-            if not catalog:
-                cli_logger.warning(
-                    "No operating points found",
-                    context={"project_id": args.project_id},
-                )
-            else:
-                for summary in catalog:
-                    cli_logger.info(
-                        "Operating point",
-                        context={
-                            "project_id": args.project_id,
-                            "op_id": summary.op_id,
-                            "altitude_m": summary.altitude_m,
-                            "mach": summary.mach,
-                            "tas_mps": summary.tas_mps,
-                            "notes": summary.notes or None,
-                        },
-                    )
-            return 0
-
-        if args.cmd == "cache":
-            projects_root = ensure_dir(Path(args.projects_root))
-            proj = ensure_dir(projects_root / args.project_id)
-            results_root = ensure_dir(proj / "results")
-            cache_logger = cli_logger.bind(subcommand=args.cache_cmd)
-            manager = AnalysisManager(
-                vsp=object(),
-                results_root=results_root,
-                auto_init_vsp=False,
-                open_gui=False,
-            )
-            analysis_filter = list(dict.fromkeys(args.analysis)) if args.analysis else []
-            ticket_filter = list(dict.fromkeys(args.ticket)) if getattr(args, "ticket", None) else []
-
-            if args.cache_cmd == "list":
-                summaries = manager.cache_summaries(
-                    analysis_keys=analysis_filter or None,
-                    ticket_shas=ticket_filter or None,
-                    include_deferred=bool(args.include_deferred),
-                )
-                if not summaries:
-                    cache_logger.info(
-                        "No cached receipts recorded",
-                        context={
-                            "project_id": args.project_id,
-                            "analysis_keys": analysis_filter or None,
-                            "ticket_shas": ticket_filter or None,
-                            "include_deferred": bool(args.include_deferred),
-                        },
-                    )
-                    return 0
-                cache_logger.info(
-                    "Cached receipt summary",
-                    context={
-                        "project_id": args.project_id,
-                        "count": len(summaries),
-                        "analysis_keys": analysis_filter or None,
-                        "ticket_shas": ticket_filter or None,
-                        "include_deferred": bool(args.include_deferred),
-                    },
-                )
-                for summary in summaries:
-                    cache_logger.info(
-                        "Cached receipt",
-                        context={
-                            "analysis": summary["analysis"],
-                            "ticket_sha": summary["ticket_sha"],
-                            "status": summary["status"],
-                            "stored_at": summary.get("stored_at"),
-                            "run_started": summary.get("run_started"),
-                            "artifact_dir": summary.get("artifact_dir"),
-                            "dependencies": summary.get("dependencies"),
-                        },
-                    )
-                return 0
-
-            if args.cache_cmd == "clear":
-                removed = manager.clear_cache(
-                    analysis_keys=analysis_filter or None,
-                    ticket_shas=ticket_filter or None,
-                    drop_results=not args.keep_results,
-                )
-                cache_logger.info(
-                    "Cleared cached receipts",
-                    context={
-                        "project_id": args.project_id,
-                        "analysis_keys": analysis_filter or None,
-                        "ticket_shas": removed,
-                        "kept_results": bool(args.keep_results),
-                        "removed_count": len(removed),
-                    },
-                )
-                return 0
-
-        if args.cmd == "results":
-            projects_root = ensure_dir(Path(args.projects_root))
-            proj = ensure_dir(projects_root / args.project_id)
-            entries = load_result_entries(proj)
-            if args.analysis:
-                entries = [e for e in entries if e.analysis == args.analysis]
-            if args.op:
-                entries = [e for e in entries if (e.summary or {}).get("operating_point_id") == args.op]
-            if not entries:
-                cli_logger.info(
-                    "No results recorded",
-                    context={"project_id": args.project_id},
-                )
-                return 0
-            entries.sort(
-                key=lambda e: (
-                    e.manifest.started_utc if e.manifest and e.manifest.started_utc else ""
-                ),
-                reverse=True,
-            )
-            limit = args.limit if args.limit is not None and args.limit > 0 else len(entries)
-            cli_logger.info(
-                "Results summary",
-                context={
-                    "project_id": args.project_id,
-                    "requested_limit": args.limit,
-                    "showing": min(limit, len(entries)),
-                    "total": len(entries),
-                },
-            )
-            for entry in entries[:limit]:
-                started = entry.manifest.started_utc if entry.manifest and entry.manifest.started_utc else "?"
-                summary = entry.summary or {}
-                cli_logger.info(
-                    "Result entry",
-                    context={
-                        "started": started,
-                        "analysis": entry.analysis,
-                        "config": summary.get("config_id")
-                        or summary.get("configuration_id"),
-                        "set": summary.get("set_name") or summary.get("set_index"),
-                        "mode": summary.get("mode_id"),
-                        "operating_point": summary.get("operating_point_id"),
-                        "artifacts": entry.artifact_dir,
-                        "ticket_sha": entry.ticket_sha256,
-                    },
-                )
-            return 0
-
-        if args.cmd == "smoke":
-            projects_root = ensure_dir(Path(args.projects_root))
-            smoke_run(
-                projects_root,
-                args.project_id,
-                set_name=args.set_name,
-                mach=args.mach,
-                alpha_deg=args.alpha_deg,
-                config_id=args.config_id,
-                op_id=args.op_id,
-            )
-            return 0
-
+def _handle_configs(args):
+    from .io import config_catalog
+    from .core import schema
+    project_root = Path('projects') / args.project_id
+    if args.configs_action == 'list':
+        catalog = config_catalog.load_config_catalog(project_root)
+        for cfg in catalog.configs:
+            print(cfg.config_id, cfg.geom_set_name or '-', 'mode=' + (cfg.mode.mode_id if cfg.mode else '-'))
         return 0
+    # Acquire / init analysis manager (reusing smoke style init)
+    from .analysis.manager import AnalysisManager
+    from .vsp import session as vsp_session
+    manager = AnalysisManager(project_root=project_root)
+    if vsp_session.get_vsp() is None:
+        # initialize VSP session if not already
+        vsp_session.import_vsp()
+    if args.configs_action == 'capture':
+        cfg = vsp_config.register_configuration_with_lock(
+            project_root,
+            args.config_id,
+            preferred_set=args.preferred_set,
+            analysis_manager=manager,
+            validate=not args.no_validate,
+        )
+        print('Captured configuration', cfg.config_id)
+        return 0
+    if args.configs_action == 'capture-mode':
+        udp_over = _parse_kv_pairs(args.udp)
+        run_over = _parse_kv_pairs(args.runtime)
+        cfg = vsp_config.register_configuration_from_active_mode_with_lock(
+            project_root,
+            args.config_id,
+            include_presets=not args.no_presets,
+            overrides_udp=udp_over or None,
+            overrides_runtime=run_over or None,
+            analysis_manager=manager,
+            validate=not args.no_validate,
+        )
+        print('Captured mode configuration', cfg.config_id)
+        return 0
+    raise SystemExit('Unknown configs action')
 
-    except StreamlineError as exc:
-        _log_streamline_error(exc)
-        return 1
-    except Exception as exc:  # pragma: no cover - CLI guardrail
-        _log_unhandled_error(exc, context={"command": getattr(args, "cmd", None)})
-        return 1
+
+def build_arg_parser():  # augment existing parser
+    parser = argparse.ArgumentParser(prog='streamline')
+    sub = parser.add_subparsers(dest='command')
+    # Add other subcommands here
+    add_configs_subcommands(sub)
+    # Add TUI command integration
+    tui_p = sub.add_parser('tui', help='Launch Textual TUI for a project')
+    tui_p.add_argument('project_id')
+    tui_p.add_argument('--open-gui', action='store_true', help='Also launch / attach OpenVSP GUI')
+    return parser
+
+
+def main(argv: Optional[list[str]] = None) -> int:
+    parser = build_arg_parser()
+    args = parser.parse_args(argv)
+    if args.command == 'configs':
+        return _handle_configs(args)
+    if args.command == 'tui':
+        from .tui.launch import launch_tui
+        return launch_tui(args.project_id, open_gui=args.open_gui)
+    # Handle other commands here
+    return 0
 
 
 if __name__ == "__main__":

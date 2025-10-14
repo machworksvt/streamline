@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import os, sys, pathlib, platform, importlib
+import os, sys
 import pytest
 from pathlib import Path
 from streamline.vsp import import_vsp
@@ -10,33 +10,9 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-_OPENVSP_ROOT = os.environ.get("OPENVSP_HOME") or os.environ.get("STREAMLINE_OPENVSP_HOME")
-_PY_DIR = os.environ.get("OPENVSP_PYTHON_DIR") or os.environ.get("STREAMLINE_OPENVSP_PYTHON_DIR")
-
-
-def _inject_paths():
-    # Prepend python bindings directory
-    if _PY_DIR and pathlib.Path(_PY_DIR).is_dir() and _PY_DIR not in sys.path:
-        sys.path.insert(0, _PY_DIR)
-
-    # Windows: add DLL search paths so the native module resolves dependencies
-    if platform.system().lower().startswith("win") and _OPENVSP_ROOT:
-        for sub in ["", "bin", "vspaero_ex"]:
-            d = pathlib.Path(_OPENVSP_ROOT) / sub
-            if d.is_dir():
-                try:
-                    os.add_dll_directory(str(d))
-                except Exception:
-                    pass
-
-    if os.environ.get("STREAMLINE_DEBUG_VSP"):
-        print("DEBUG VSP sys.executable:", sys.executable)
-        print("DEBUG VSP sys.path head:", sys.path[:8])
-        print("DEBUG VSP OPENVSP_HOME:", _OPENVSP_ROOT)
-        print("DEBUG VSP OPENVSP_PYTHON_DIR:", _PY_DIR)
-
-
-_inject_paths()
+if os.environ.get("STREAMLINE_DEBUG_VSP"):
+    print("DEBUG VSP sys.executable:", sys.executable)
+    print("DEBUG VSP sys.path head:", sys.path[:8])
 
 
 @pytest.fixture(scope="session")

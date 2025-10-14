@@ -21,19 +21,9 @@ jobs:
         os: [windows-latest, ubuntu-latest]
         python: ["3.11"]
     runs-on: ${{ matrix.os }}
-    env:
-      STREAMLINE_ALLOW_VSP_STUB: "0"
-      STREAMLINE_DEBUG_VSP: "0"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Cache OpenVSP downloads
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/openvsp/downloads
-          key: openvsp-downloads-${{ runner.os }}-${{ hashFiles('tools/openvsp.json') }}
 
       - name: Set up micromamba
         uses: mamba-org/setup-micromamba@v1
@@ -55,46 +45,6 @@ jobs:
           micromamba run -n streamline python -m pip install --upgrade pip
           micromamba run -n streamline python -m pip install -e .
           micromamba run -n streamline python -m pip install pytest
-
-      - name: Bootstrap OpenVSP runtime
-        run: |
-          micromamba run -n streamline python -m tools.install_openvsp --export "$RUNNER_TEMP/openvsp-manifest.json"
-          micromamba run -n streamline python - <<'PY'
-          import json, os, pathlib
-
-          manifest_path = pathlib.Path(os.environ["RUNNER_TEMP"]) / "openvsp-manifest.json"
-          data = json.loads(manifest_path.read_text())
-
-          env_file = pathlib.Path(os.environ["GITHUB_ENV"])
-          path_file = pathlib.Path(os.environ["GITHUB_PATH"])
-
-          library_paths = data.get("library_paths", {}) or {}
-
-          with env_file.open("a", encoding="utf-8") as env:
-              env.write(f"OPENVSP_HOME={data['install_root']}\n")
-              env.write(f"STREAMLINE_OPENVSP_HOME={data['install_root']}\n")
-              env.write(f"OPENVSP_PYTHON_DIR={data['python_dir']}\n")
-              env.write(f"STREAMLINE_OPENVSP_PYTHON_DIR={data['python_dir']}\n")
-              if data.get("version"):
-                  env.write(f"OPENVSP_VERSION={data['version']}\n")
-              for key, paths in library_paths.items():
-                  if paths:
-                      env.write(f"{key}={os.pathsep.join(paths)}\n")
-
-          path_entries = [p for p in data.get("path_entries", []) if p]
-          if path_entries:
-              with path_file.open("a", encoding="utf-8") as path_out:
-                  for entry in path_entries:
-                      path_out.write(f"{entry}\n")
-          PY
-
-      - name: Display OpenVSP env vars
-        run: |
-          python - <<'PY'
-          import os
-          for k in sorted([k for k in os.environ if k.startswith(('OPENVSP','STREAMLINE_'))]):
-              print(f"{k}={os.environ[k]}")
-          PY
 
       - name: Run tests
         run: |
