@@ -53,15 +53,24 @@ jobs:
           Remove-Item $vspZip
           $vspPython = Join-Path $vspRoot "python"
           $vspBin = Join-Path $vspRoot "bin"
-          micromamba run -n streamline python -m pip install -r (Join-Path $vspPython "requirements-dev.txt")
-          Add-Content $env:GITHUB_PATH $vspBin
-          Add-Content $env:GITHUB_PATH $vspPython
-          if ($env:PYTHONPATH) {
-            Add-Content $env:GITHUB_ENV "PYTHONPATH=$vspPython;$env:PYTHONPATH"
-          } else {
-            Add-Content $env:GITHUB_ENV "PYTHONPATH=$vspPython"
+          $packages = @(
+            "vsp_airfoils",
+            "utilities",
+            "degen_geom",
+            "openvsp_config",
+            "openvsp",
+            "CHARM",
+            "AvlPy",
+            "pyPMARC"
+          )
+          foreach ($pkg in $packages) {
+            $pkgPath = Join-Path $vspPython $pkg
+            Write-Host "Installing OpenVSP package $pkgPath"
+            micromamba run -n streamline python -m pip install -e $pkgPath
           }
-          micromamba run -n streamline python -c "import sys; import os; sys.path.append(r'$vspPython'); import openvsp; print('OpenVSP version:', openvsp.GetVSPVersion())"
+          Add-Content $env:GITHUB_PATH $vspBin
+          Add-Content $env:GITHUB_ENV "PYTHONPATH=$vspPython"
+          micromamba run -n streamline python -c "import openvsp; print('OpenVSP version:', openvsp.GetVSPVersion())"
 
       - name: Run tests
         run: |
