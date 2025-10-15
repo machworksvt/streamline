@@ -11,29 +11,14 @@ permissions:
 
 defaults:
   run:
-    shell: bash -l {0}
+    shell: pwsh
 
 jobs:
   test:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest, ubuntu-latest]
-        python: ["3.11"]
-    runs-on: ${{ matrix.os }}
-    env:
-      STREAMLINE_ALLOW_VSP_STUB: "0"
-      STREAMLINE_DEBUG_VSP: "0"
+    runs-on: windows-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Cache OpenVSP downloads
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/openvsp/downloads
-          key: openvsp-downloads-${{ runner.os }}-${{ hashFiles('tools/openvsp.json') }}
 
       - name: Set up micromamba
         uses: mamba-org/setup-micromamba@v1
@@ -42,8 +27,8 @@ jobs:
           environment-file: environment.yml
           cache-environment: true
           cache-downloads: true
-          create-args: python=${{ matrix.python }}
-          init-shell: bash
+          create-args: python=3.11
+          init-shell: powershell
 
       - name: Show micromamba info
         run: |
@@ -56,48 +41,36 @@ jobs:
           micromamba run -n streamline python -m pip install -e .
           micromamba run -n streamline python -m pip install pytest
 
-      - name: Bootstrap OpenVSP runtime
+      - name: Install OpenVSP runtime and run tests
         run: |
-          micromamba run -n streamline python -m tools.install_openvsp --export "$RUNNER_TEMP/openvsp-manifest.json"
-          micromamba run -n streamline python - <<'PY'
-          import json, os, pathlib
-
-          manifest_path = pathlib.Path(os.environ["RUNNER_TEMP"]) / "openvsp-manifest.json"
-          data = json.loads(manifest_path.read_text())
-
-          env_file = pathlib.Path(os.environ["GITHUB_ENV"])
-          path_file = pathlib.Path(os.environ["GITHUB_PATH"])
-
-          library_paths = data.get("library_paths", {}) or {}
-
-          with env_file.open("a", encoding="utf-8") as env:
-              env.write(f"OPENVSP_HOME={data['install_root']}\n")
-              env.write(f"STREAMLINE_OPENVSP_HOME={data['install_root']}\n")
-              env.write(f"OPENVSP_PYTHON_DIR={data['python_dir']}\n")
-              env.write(f"STREAMLINE_OPENVSP_PYTHON_DIR={data['python_dir']}\n")
-              if data.get("version"):
-                  env.write(f"OPENVSP_VERSION={data['version']}\n")
-              for key, paths in library_paths.items():
-                  if paths:
-                      env.write(f"{key}={os.pathsep.join(paths)}\n")
-
-          path_entries = [p for p in data.get("path_entries", []) if p]
-          if path_entries:
-              with path_file.open("a", encoding="utf-8") as path_out:
-                  for entry in path_entries:
-                      path_out.write(f"{entry}\n")
-          PY
-
-      - name: Display OpenVSP env vars
-        run: |
-          python - <<'PY'
-          import os
-          for k in sorted([k for k in os.environ if k.startswith(('OPENVSP','STREAMLINE_'))]):
-              print(f"{k}={os.environ[k]}")
-          PY
-
-      - name: Run tests
-        run: |
+          $vspUrl = "https://openvsp.org/download.php?file=zips/current/windows/OpenVSP-3.46.0-win64-Python3.11.zip"
+          $vspZip = Join-Path $PWD "OpenVSP.zip"
+          Write-Host "Downloading OpenVSP from $vspUrl"
+          Invoke-WebRequest -Uri $vspUrl -OutFile $vspZip -UseBasicParsing
+          $vspRoot = Join-Path $PWD "OpenVSP-3.46.0-win64"
+          if (Test-Path $vspRoot) { Remove-Item -Recurse -Force $vspRoot }
+          Expand-Archive -Path $vspZip -DestinationPath $PWD -Force
+          Remove-Item $vspZip
+          $vspPython = Join-Path $vspRoot "python"
+          $vspBin = Join-Path $vspRoot "bin"
+          $packages = @(
+            "vsp_airfoils",
+            "utilities",
+            "degen_geom",
+            "openvsp_config",
+            "openvsp",
+            "CHARM",
+            "AvlPy",
+            "pyPMARC"
+          )
+          foreach ($pkg in $packages) {
+            $pkgPath = Join-Path $vspPython $pkg
+            Write-Host "Installing OpenVSP package $pkgPath"
+            micromamba run -n streamline python -m pip install -e $pkgPath
+          }
+          Add-Content -Path $env:GITHUB_PATH -Value "$vspBin`n"
+          Add-Content -Path $env:GITHUB_ENV -Value "PYTHONPATH=$vspPython`n"
+          micromamba run -n streamline python -c "import openvsp; print('OpenVSP version:', openvsp.GetVSPVersion())"
           micromamba run -n streamline python -c "import sys; print('Python', sys.version)"
           micromamba run -n streamline pytest -vv --maxfail=1
 
@@ -105,3 +78,4 @@ jobs:
         if: always()
         run: |
           echo "(Placeholder for future artifact upload)"
+

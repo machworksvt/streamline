@@ -6,22 +6,38 @@ import uuid
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, Optional
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 from ..analysis.manager import AnalysisManager
 from ..core.logging import get_logger
-from ..io.config_catalog import load_config_catalog
+from ..core.errors import VSPSessionError
+from ..core.schema import Configuration, ModeRef, VarPresetRef
+from ..io.config_catalog import get_configuration, load_config_catalog
 from ..io.op_catalog import load_op_catalog
 from ..io.results_index import ResultIndexEntry, load_result_entries
-from ..io.fs import load_project_def
+from ..io.fs import load_config, load_project_def
 from ..vsp.contracts.base import Ticket
+from ..vsp.configure import (
+    ConfigurationIntrospectionError,
+    configuration_from_mode,
+    derive_configuration as derive_configuration_from_base,
+    list_mode_details,
+    list_vsp_sets,
+    revalidate_existing_configs_with_lock,
+    save_configuration_json,
+)
 
 from .context import SessionConfig, SessionJob, SessionState
 from .event_bus import EventBus
 from .events import (
     AnalysisJobQueued,
     AnalysisJobStatusChanged,
+    CatalogChangedEvent,
     CacheIndexUpdated,
+    ConfigurationCreatedEvent,
+    ConfigurationRemovedEvent,
+    ConfigurationStaleEvent,
+    ConfigurationUpdatedEvent,
     ProjectAssetsRefreshed,
     ResultsIndexUpdated,
     WorkerFailed,
@@ -149,11 +165,258 @@ class ProjectSession:
     # Project refresh routines
     # ------------------------------------------------------------------
     def refresh_project_assets(self) -> None:
+        def _normalize_provenance(entry: Any) -> Dict[str, Any]:
+            if isinstance(entry, dict):
+                result = dict(entry)
+                presets = result.get("preset_pairs")
+                if presets is not None and not isinstance(presets, tuple):
+                    result["preset_pairs"] = tuple(presets)
+                return result
+            if isinstance(entry, tuple):
+                parts = list(entry) + [None] * max(0, 7 - len(entry))
+                preset_part = parts[2] if len(parts) > 2 else None
+                if preset_part is None:
+                    preset_part = ()
+                return {
+                    "mode_id": parts[0] if len(parts) > 0 else None,
+                    "mode_use_flag": parts[1] if len(parts) > 1 else None,
+                    "preset_pairs": tuple(preset_part),
+                    "geom_set_index": parts[3] if len(parts) > 3 else None,
+                    "geom_set_name": parts[4] if len(parts) > 4 else None,
+                    "checksum": parts[5] if len(parts) > 5 else None,
+                    "captured_at": parts[6] if len(parts) > 6 else None,
+                }
+            return {}
+
         configs = load_config_catalog(self.project_root)
         ops = load_op_catalog(self.project_root)
+        new_config_signatures = {item.config_id: item.signature for item in configs}
+        new_config_provenance: Dict[str, Dict[str, Any]] = {}
+        new_config_metadata_paths: Dict[str, Optional[Path]] = {}
+        for item in configs:
+            new_config_provenance[item.config_id] = {
+                "mode_id": item.mode_id,
+                "mode_use_flag": item.mode_use_flag,
+                "preset_pairs": tuple(item.preset_pairs),
+                "geom_set_index": item.set_index,
+                "geom_set_name": item.set_name,
+                "checksum": item.checksum,
+                "captured_at": item.captured_at,
+            }
+            new_config_metadata_paths[item.config_id] = item.metadata_path
+        new_op_signatures = {item.op_id: item.signature for item in ops}
+        new_op_metadata: Dict[str, Dict[str, Any]] = {}
+        for item in ops:
+            new_op_metadata[item.op_id] = {
+                "checksum": item.checksum,
+                "captured_at": item.captured_at,
+                "metadata_path": str(item.metadata_path) if item.metadata_path else None,
+            }
+
         with self._lock:
+            old_config_signatures = dict(self.state.config_signatures)
+            old_config_provenance = {
+                cfg: _normalize_provenance(val)
+                for cfg, val in dict(self.state.config_provenance).items()
+            }
+            old_config_metadata_paths = dict(getattr(self.state, "config_metadata_paths", {}))
+            old_op_signatures = dict(self.state.op_signatures)
+            old_op_metadata = dict(getattr(self.state, "op_metadata", {}))
             self.state.config_catalog = configs
             self.state.op_catalog = ops
+            self.state.config_signatures = new_config_signatures
+            self.state.config_provenance = new_config_provenance
+            self.state.config_metadata_paths = new_config_metadata_paths
+            self.state.op_signatures = new_op_signatures
+            self.state.op_metadata = new_op_metadata
+
+        added_configs = [cfg_id for cfg_id in new_config_signatures if cfg_id not in old_config_signatures]
+        removed_configs = [cfg_id for cfg_id in old_config_signatures if cfg_id not in new_config_signatures]
+        updated_configs: Dict[str, Dict[str, bool]] = {}
+        for summary in configs:
+            cfg_id = summary.config_id
+            if cfg_id not in old_config_signatures:
+                continue
+            changes: Dict[str, bool] = {}
+            if new_config_signatures[cfg_id] != old_config_signatures[cfg_id]:
+                changes["signature_changed"] = True
+            new_prov = new_config_provenance.get(cfg_id, {})
+            old_prov = old_config_provenance.get(cfg_id, {})
+            if new_prov != old_prov:
+                changes["provenance_changed"] = True
+            if new_prov.get("checksum") != old_prov.get("checksum"):
+                changes["checksum_changed"] = True
+            if new_prov.get("captured_at") != old_prov.get("captured_at"):
+                changes["captured_at_changed"] = True
+            if changes:
+                updated_configs[cfg_id] = changes
+
+        added_ops = [op_id for op_id in new_op_signatures if op_id not in old_op_signatures]
+        removed_ops = [op_id for op_id in old_op_signatures if op_id not in new_op_signatures]
+        updated_ops = [
+            op_id
+            for op_id in new_op_signatures
+            if op_id in old_op_signatures and new_op_signatures[op_id] != old_op_signatures[op_id]
+        ]
+
+        impacted_config_ids = tuple(
+            dict.fromkeys(added_configs + removed_configs + list(updated_configs.keys()))
+        )
+        if impacted_config_ids:
+            self.event_bus.publish(
+                CatalogChangedEvent(
+                    kind="config",
+                    identifiers=impacted_config_ids,
+                    project=str(self.project_root),
+                )
+            )
+        for cfg_id in added_configs:
+            self.event_bus.publish(
+                ConfigurationCreatedEvent(
+                    config_id=cfg_id,
+                    project=str(self.project_root),
+                    source="catalog",
+                )
+            )
+        for cfg_id, changes in updated_configs.items():
+            self.event_bus.publish(
+                ConfigurationUpdatedEvent(
+                    config_id=cfg_id,
+                    project=str(self.project_root),
+                    changes=changes,
+                )
+            )
+        for cfg_id in removed_configs:
+            self.event_bus.publish(
+                ConfigurationRemovedEvent(
+                    config_id=cfg_id,
+                    project=str(self.project_root),
+                    reason="removed_from_catalog",
+                )
+            )
+
+        drift_messages: Dict[str, List[str]] = {}
+        modes_map: Dict[str, Any] = {}
+        set_names: List[str] = []
+        try:
+            details = list_mode_details(resolve_names=True)
+            modes_map = {d.mode_id: d for d in details if d.mode_id}
+            set_names = list_vsp_sets()
+        except Exception as exc:  # pragma: no cover - depends on VSP availability
+            self._logger.debug("Skipping mode drift detection", hint=str(exc))
+        for summary in configs:
+            if not summary.mode_id:
+                continue
+            md = modes_map.get(summary.mode_id)
+            if md is None:
+                continue
+            stored = new_config_provenance.get(summary.config_id, {})
+            messages: List[str] = []
+            stored_pairs = tuple(stored.get("preset_pairs") or ())
+            actual_pairs = tuple(
+                (gs.group_name, gs.setting_name)
+                for gs in md.group_settings
+                if gs.group_name and gs.setting_name
+            )
+            if stored_pairs != actual_pairs:
+                messages.append("Mode preset assignments differ from stored configuration metadata")
+            stored_use = stored.get("mode_use_flag")
+            actual_use = md.use_mode_flag
+            if stored_use is not None and actual_use is not None and bool(stored_use) != bool(actual_use):
+                messages.append("Mode use flag changed in OpenVSP")
+            stored_set_index = stored.get("geom_set_index")
+            actual_set_index = md.normal_set
+            if (
+                stored_set_index is not None
+                and actual_set_index is not None
+                and stored_set_index != actual_set_index
+            ):
+                messages.append(
+                    f"Mode set index changed from {stored_set_index} to {actual_set_index}"
+                )
+            stored_set_name = stored.get("geom_set_name")
+            actual_set_name = None
+            if (
+                set_names
+                and actual_set_index is not None
+                and 0 <= actual_set_index < len(set_names)
+            ):
+                actual_set_name = set_names[actual_set_index]
+            if stored_set_name and actual_set_name and stored_set_name != actual_set_name:
+                messages.append(
+                    f"Mode set name changed from '{stored_set_name}' to '{actual_set_name}'"
+                )
+            if messages:
+                drift_messages[summary.config_id] = messages
+
+        impacted_op_ids = tuple(dict.fromkeys(added_ops + removed_ops + updated_ops))
+        if impacted_op_ids:
+            self.event_bus.publish(
+                CatalogChangedEvent(
+                    kind="op",
+                    identifiers=impacted_op_ids,
+                    project=str(self.project_root),
+                )
+            )
+
+        invalidate_keys = [f"configuration:{cfg_id}" for cfg_id in list(updated_configs.keys()) + removed_configs]
+        if drift_messages:
+            invalidate_keys.extend(f"configuration:{cfg_id}" for cfg_id in drift_messages.keys())
+        if invalidate_keys:
+            invalidate_keys = list(dict.fromkeys(invalidate_keys))
+            try:
+                self.manager.invalidate(invalidate_keys)
+            except Exception as exc:  # pragma: no cover - defensive
+                self._logger.warning(
+                    "Failed to invalidate cache after catalog refresh",
+                    context={"keys": invalidate_keys},
+                    hint=str(exc),
+                )
+
+        config_models = []
+        for summary in configs:
+            try:
+                config_models.append(load_config(summary.path))
+            except Exception as exc:  # pragma: no cover - defensive logging
+                self._logger.warning(
+                    "Failed to load configuration for validation",
+                    context={"config_id": summary.config_id, "path": str(summary.path)},
+                    hint=str(exc),
+                )
+        stale_map: Dict[str, Tuple[str, ...]] = {}
+        if config_models:
+            validation: Dict[str, List[str]] = {}
+            try:
+                validation = revalidate_existing_configs_with_lock(config_models, analysis_manager=self.manager)
+            except VSPSessionError as exc:  # pragma: no cover - depends on real VSP
+                self._logger.debug(
+                    "Skipping configuration revalidation; OpenVSP session unavailable",
+                    hint=str(exc),
+                )
+            except Exception as exc:  # pragma: no cover - defensive logging
+                self._logger.warning(
+                    "Configuration revalidation failed",
+                    hint=str(exc),
+                )
+            if validation:
+                stale_map = {cfg_id: tuple(errs) for cfg_id, errs in validation.items() if errs}
+
+        combined_stale: Dict[str, Tuple[str, ...]] = dict(stale_map)
+        for cfg_id, messages in drift_messages.items():
+            existing = list(combined_stale.get(cfg_id, ()))
+            existing.extend(messages)
+            combined_stale[cfg_id] = tuple(existing)
+        for cfg_id, errors in combined_stale.items():
+            self.event_bus.publish(
+                ConfigurationStaleEvent(
+                    config_id=cfg_id,
+                    errors=errors,
+                )
+            )
+        with self._lock:
+            self.state.stale_configs = combined_stale
+            self.state.mode_drift_configs = {cfg_id: tuple(msgs) for cfg_id, msgs in drift_messages.items()}
+
         self.event_bus.publish(
             ProjectAssetsRefreshed(
                 session_id=self.session_id,
@@ -183,6 +446,108 @@ class ProjectSession:
                 entry_count=len(results),
             )
         )
+
+    # ------------------------------------------------------------------
+    # Configuration helpers
+    # ------------------------------------------------------------------
+    def list_mode_candidates(self, *, resolve_names: bool = True) -> List[Dict[str, Any]]:
+        try:
+            details = list_mode_details(resolve_names=resolve_names)
+        except Exception as exc:
+            self._logger.debug("Failed to enumerate OpenVSP modes", hint=str(exc))
+            return []
+        result: List[Dict[str, Any]] = []
+        for item in details:
+            result.append(
+                {
+                    "mode_id": item.mode_id,
+                    "mode_name": item.mode_name,
+                    "use_mode_flag": item.use_mode_flag,
+                    "normal_set": item.normal_set,
+                    "degen_set": item.degen_set,
+                    "group_settings": [
+                        {
+                            "group_id": gs.group_id,
+                            "group_name": gs.group_name,
+                            "setting_id": gs.setting_id,
+                            "setting_name": gs.setting_name,
+                        }
+                        for gs in item.group_settings
+                    ],
+                }
+            )
+        return result
+
+    def create_configuration_from_mode(
+        self,
+        config_id: str,
+        mode_id: str,
+        *,
+        geom_set_name: Optional[str] = None,
+        geom_set_index: Optional[int] = None,
+        include_presets: bool = True,
+        udp_overrides: Optional[Dict[str, float]] = None,
+        runtime_overrides: Optional[Dict[str, float]] = None,
+        notes: Optional[str] = None,
+        use_mode_flag: Optional[bool] = None,
+        persist: bool = True,
+    ) -> Configuration:
+        try:
+            configuration = configuration_from_mode(
+                config_id=config_id,
+                mode_id=mode_id,
+                geom_set_name=geom_set_name,
+                geom_set_index=geom_set_index,
+                include_presets=include_presets,
+                udp_overrides=udp_overrides,
+                runtime_overrides=runtime_overrides,
+                notes=notes,
+                use_mode_flag=use_mode_flag,
+            )
+        except ConfigurationIntrospectionError as exc:
+            self._logger.error(
+                "Failed to build configuration from mode",
+                context={"mode_id": mode_id, "config_id": config_id},
+                hint=str(exc),
+            )
+            raise
+        if persist:
+            save_configuration_json(self.project_root, configuration)
+            self.refresh_project_assets()
+        return configuration
+
+    def derive_configuration(
+        self,
+        base_config_id: str,
+        new_config_id: str,
+        *,
+        udp_overrides: Optional[Dict[str, float]] = None,
+        runtime_overrides: Optional[Dict[str, float]] = None,
+        additional_presets: Optional[Iterable[Tuple[str, str]]] = None,
+        notes: Optional[str] = None,
+        mode_override: Optional[ModeRef] = None,
+        persist: bool = True,
+    ) -> Configuration:
+        base_config = get_configuration(self.project_root, base_config_id)
+        additional_refs: List[VarPresetRef] = []
+        if additional_presets:
+            for group_name, setting_name in additional_presets:
+                additional_refs.append(
+                    VarPresetRef(group_name=group_name, setting_name=setting_name)
+                )
+        derived = derive_configuration_from_base(
+            base_config,
+            new_config_id,
+            udp_overrides=udp_overrides,
+            runtime_overrides=runtime_overrides,
+            additional_presets=additional_refs or None,
+            notes=notes,
+            mode_override=mode_override,
+        )
+        if persist:
+            save_configuration_json(self.project_root, derived)
+            self.refresh_project_assets()
+        return derived
 
     # ------------------------------------------------------------------
     # Job orchestration
@@ -328,4 +693,28 @@ class ProjectSession:
             context={"session_id": self.session_id},
             hint=details,
         )
+
+
+def create_project_session(
+    project_id: str,
+    *,
+    projects_root: Path,
+    open_gui: bool = False,
+    auto_start_workers: bool = True,
+    event_bus: Optional[EventBus] = None,
+    manager_factory: Optional[Callable[[Path], AnalysisManager]] = None,
+) -> ProjectSession:
+    """Convenience wrapper mirroring the legacy helper."""
+
+    config = SessionConfig(
+        projects_root=projects_root,
+        project_id=project_id,
+        open_gui=open_gui,
+        auto_start_workers=auto_start_workers,
+    )
+    return ProjectSession.open(
+        config=config,
+        event_bus=event_bus,
+        manager_factory=manager_factory,
+    )
 

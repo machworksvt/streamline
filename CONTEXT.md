@@ -165,7 +165,7 @@ Structured models keep JSON on disk and payloads in memory consistent.
 - Global airfoil assets live under `data/airfoils/`; per-project tuned variants will be stored within each project for versioned analysis.
 - A future XFOIL loop will populate or refine these files and feed OpenVSP updates via UDPs or geometry edits.
 
-## 13. UI (Textual) — planned shape
+## 13. UI (Textual) ï¿½ planned shape
 - The planned Textual TUI will provide panes for set/mode exploration, quick analyses, and discipline-focused views (S&C, mission, structures).
 - Immediate edits initiated by users will persist instantly; tool-driven edits may be staged via `StagedEditBatch` models for review before application.
 - Keyboard and pointer interactions will be supported, with the UI operating on a single project context at a time.
@@ -219,6 +219,66 @@ Structured models keep JSON on disk and payloads in memory consistent.
 - Separation: Higher layers submit jobs; only materializers touch the filesystem, producing inspectable artifacts and a durable index.
 - Extensibility: Adding a new analysis means introducing a ticket/payload/receipt trio and registering it with the manager; surrounding infrastructure stays unchanged.
 - Transparency: Every run writes tickets, summaries, and manifests so manual inspection, debugging, and future reporting remain straightforward.
+
+## 21. Configuration GUI Bridge & Sync Workflow (new)
+- Purpose: Allow users to author Sets, Modes, and Variable Preset groups/settings inside the OpenVSP GUI, then register deterministic Streamline `Configuration` objects without hand-editing JSON.
+- Introspection helpers (in `vsp/configure.py`): `list_modes`, `get_active_mode_id`, `capture_active_mode_ref`, `list_var_preset_groups`, `list_var_presets(group)`, `capture_active_var_presets`, `snapshot_current_configuration`, `build_ephemeral_configuration_dict`, `build_configuration_model`, `compute_configuration_diff`, `register_current_configuration`.
+- Registration flow:
+  1. User configures geometry, creates Mode + Var Preset Sets in GUI.
+  2. Streamline (under VSP lock) calls `snapshot_current_configuration()` to capture active Mode, first/active Set, and active presets (best-effort).
+  3. Builds a `Configuration` model via `build_configuration_model(config_id, snapshot)`.
+  4. Persists JSON with `save_configuration_json` / `register_current_configuration` into `projects/<id>/configs/<config_id>.json`.
+  5. Catalog reload + (future) `CatalogChanged(type='config')` event not yet wired.
+- Update/diff cycle:
+  - On GUI change, capture a fresh snapshot and run `compute_configuration_diff(existing_cfg, new_snapshot)`; if diffs non-empty, prompt user to (a) overwrite, (b) create versioned config (e.g. `cfg_v2`), or (c) discard changes.
+  - Planned event: `ConfigurationUpdated(config_id, diff)` for UI reactive refresh & cache invalidation (`dependency key: config:<id>`).
+- Validation (current + planned):
+  - Existence: referenced Mode ID, preset group/setting names, and Set name must resolve; fail fast with `ConfigurationIntrospectionError`.
+  - Consistency: if a Mode is active and also presets differ from Mode defaults, flag as mixed source (warn user) until explicit policy decided.
+  - Uniqueness: `config_id` must not collide (unless overwrite confirmed).
+  - Normalization: ensure list fields default to `[]`, dict fields to `{}`; exclude `None` on disk.
+  - Future: verify hinge / control surface group / payload toggle coherence once introspection for those is added.
+- Ambiguities & fallbacks:
+  - Active preset detection depends on `IsVarPresetSettingActive`; if unavailable returns empty, leaving `var_presets` blank (user can manually specify).
+  - If no Set is explicitly chosen, first enumerated Set is used for `geom_set_name` (documented in snapshot helper).
+  - Mode usage flag: falls back to `True` if API does not expose `GetUseModeFlag`.
+- Concurrency & safety:
+  - All helpers invoked via wrappers acquiring the AnalysisManager's VSP lock (`register_configuration_with_lock`, `register_configuration_from_active_mode_with_lock`, `revalidate_existing_configs_with_lock`).
+  - If manager not supplied, fallback to `session.vsp_guard()`; final fallback no-op (avoid hard failure in tests without OpenVSP).
+- Events (current):
+  - `ConfigurationCreated` emitted after successful registration (`from: mode` for mode-based capture).
+  - `CatalogChanged(kind='config', config_id=...)` emitted for UI refresh triggers.
+  - `ConfigurationStale` emitted when batch revalidation finds broken links.
+  - TODO: Add `ConfigurationUpdated`, `ConfigurationRemoved`.
+- CLI integration (new commands):
+  - `streamline configs list <project>`: list stored configurations (id, set, mode id).
+  - `streamline configs capture <project> <config_id> [--set NAME] [--no-validate]`:
+    * Snapshots current GUI state (active Mode if any, active presets if detectable) into a new configuration.
+  - `streamline configs capture-mode <project> <config_id> [--no-presets] [--udp k=v ...] [--runtime k=v ...] [--no-validate]`:
+    * Forces inclusion of active Mode; optionally omits presets and applies UDP / runtime overrides (float values only).
+  - Overrides parsing: `k=v` pairs converted to floats; invalid pairs raise CLI error.
+- Thread-safe pattern:
+  - CLI commands construct an `AnalysisManager` (ensuring lock + session) then call lock-aware register helpers.
+  - Event emission occurs post-lock release to avoid holding the lock during UI notifications.
+- Revalidation:
+  - `revalidate_existing_configs_with_lock` returns mapping config_id -> list of errors; emits `ConfigurationStale` when any non-empty.
+  - Typical UI loop: periodic revalidation of currently loaded catalog; stale configs flagged visually.
+- Pending extensions (gaps):
+  - Introspection for hinges, control surface groups, payload toggles (needs additional VSP queries / conventions).
+  - Event emission integration (`ConfigurationUpdated` on overwrite, `ConfigurationRemoved`).
+  - Configuration revisioning strategy (incremental suffix vs semantic tags) and provenance metadata (e.g., originating Mode name hash).
+  - Conflict resolution policy when Mode + manual preset applications diverge (decide: allow & record both, or force a choice).
+  - Bulk import helper: iterate all Modes and produce one config per Mode (optionally cross product with selected preset sets) for rapid seeding.
+  - Watcher / polling loop to auto-detect GUI-side changes and propose updates in the TUI.
+  - Test coverage for snapshot/diff and CLI commands with mocked VSP API.
+  - Enriched diff (nested: which preset groups changed, which UDP overrides added/removed) for granular UI highlighting.
+  - Error taxonomy: split `ConfigurationIntrospectionError` into granular subclasses (ModeResolutionError, etc.).
+- Recommended next steps:
+  1. Add hinge/payload/control-group introspection utilities.
+  2. Implement `ConfigurationUpdated` event (diff payload) and integrate with invalidation.
+  3. Provide bulk Mode-to-Configuration seeding command (`streamline configs seed --all-modes`).
+  4. Add revisioning opt-in flag (`--version-on-diff`).
+  5. Extend tests (mocked VSP) for capture + capture-mode + revalidation + stale detection.
 
 
 

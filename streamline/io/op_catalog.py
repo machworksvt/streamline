@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from ..core.errors import OperatingPointCatalogError
 from ..core.logging import get_logger
 from ..core.schema import OperatingPoint
-from .fs import load_op, load_project_def
+from .fs import load_op, load_project_def, write_json
 
 
 @dataclass
@@ -17,7 +20,44 @@ class OperatingPointSummary:
     altitude_m: float
     mach: Optional[float]
     tas_mps: Optional[float]
+    signature: str
+    checksum: Optional[str]
+    captured_at: Optional[str]
+    metadata_path: Optional[Path]
     notes: str
+
+
+def _op_metadata_path(op_path: Path) -> Path:
+    return op_path.with_suffix(op_path.suffix + ".meta")
+
+
+def load_operating_point_metadata(op_path: Path) -> Dict[str, Any]:
+    meta_path = _op_metadata_path(op_path)
+    if not meta_path.exists():
+        return {}
+    try:
+        return json.loads(meta_path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def save_operating_point_json(project_root: Path, op: OperatingPoint, *, captured_at: Optional[datetime] = None) -> Path:
+    ops_dir = project_root / "ops"
+    ops_dir.mkdir(parents=True, exist_ok=True)
+    path = ops_dir / f"{op.op_name}.json"
+    payload = json.loads(op.model_dump_json(exclude_none=True))
+    write_json(payload, path)
+    checksum = hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    metadata = {
+        "metadata_version": 1,
+        "op_id": op.op_name,
+        "captured_at": (captured_at or datetime.now(timezone.utc)).isoformat(),
+        "checksum_sha256": checksum,
+    }
+    write_json(metadata, _op_metadata_path(path))
+    return path
 
 
 def load_op_catalog(project_root: Path) -> List[OperatingPointSummary]:
@@ -48,6 +88,16 @@ def load_op_catalog(project_root: Path) -> List[OperatingPointSummary]:
             logger.error(err.message, context=err.context, code=err.code)
             raise err
         seen[op.op_name] = op_path
+        metadata = load_operating_point_metadata(op_path)
+        checksum = metadata.get("checksum_sha256")
+        captured_at = metadata.get("captured_at")
+        meta_path = _op_metadata_path(op_path)
+        metadata_path = meta_path if meta_path.exists() else None
+        try:
+            stat = op_path.stat()
+            signature = f"{int(stat.st_mtime_ns)}:{stat.st_size}"
+        except FileNotFoundError:
+            signature = "missing"
         summaries.append(
             OperatingPointSummary(
                 op_id=op.op_name,
@@ -55,6 +105,10 @@ def load_op_catalog(project_root: Path) -> List[OperatingPointSummary]:
                 altitude_m=op.altitude_m,
                 mach=op.mach,
                 tas_mps=op.tas_mps,
+                signature=signature,
+                checksum=checksum,
+                captured_at=captured_at,
+                metadata_path=metadata_path,
                 notes=op.notes,
             )
         )

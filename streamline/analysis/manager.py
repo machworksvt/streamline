@@ -28,9 +28,32 @@ from ..vsp.contracts.parasite_drag import ParasiteDragReceipt
 from ..vsp.contracts.stability import StabilityReceipt
 from ..vsp.run_utils import dump_json, prepare_results_dir, relativize
 from ..vsp.session import init_context
+from pydantic import BaseModel
+
+try:
+    from ..tui.events import (
+        JobSubmittedEvent,
+        JobStartedEvent,
+        JobFailedEvent,
+        JobCompletedEvent,
+        ReceiptAddedEvent,
+    )
+except Exception:  # pragma: no cover - optional import to avoid hard dependency
+    JobSubmittedEvent = None  # type: ignore
+    JobStartedEvent = None  # type: ignore
+    JobFailedEvent = None  # type: ignore
+    JobCompletedEvent = None  # type: ignore
+    ReceiptAddedEvent = None  # type: ignore
 
 MaterializerFunc = Callable[["AnalysisManager", "AnalysisJob", str, Any, datetime, datetime], Receipt]
 
+# (Lazy event bus import to avoid circular dependency with streamline.tui)
+def _get_event_bus():  # pragma: no cover - small helper
+    try:
+        from ..tui.event_bus import get_global_event_bus  # type: ignore
+        return get_global_event_bus()
+    except Exception:
+        return None
 
 @dataclass
 class AnalysisJob:
@@ -151,7 +174,11 @@ class AnalysisManager:
         self._deferred_cache_records: Dict[str, List[CacheRecord]] = {}
 
         if vsp is None:
-            ctx = init_context(open_gui=open_gui)
+            # Adapt to updated session.init_context signature (load_graphics / launch_gui)
+            try:
+                ctx = init_context(load_graphics=open_gui, launch_gui=False)
+            except TypeError:  # backward compatibility if older signature still present
+                ctx = init_context(open_gui=open_gui)  # type: ignore[arg-type]
             self._vsp = ctx.vsp
             self._vsp_versions = dict(ctx.versions)
             self._logger.info(
@@ -340,6 +367,27 @@ class AnalysisManager:
                     "wait_for": list(job.wait_for),
                 },
             )
+            bus = _get_event_bus()
+            if bus and JobSubmittedEvent is not None:
+                try:
+                    ticket_payload = (
+                        ticket.model_dump(mode="json", exclude_none=True)
+                        if hasattr(ticket, "model_dump")
+                        else getattr(ticket, "__dict__", {})
+                    )
+                    bus.publish(
+                        JobSubmittedEvent(
+                            job_id=job_id,
+                            analysis_key=analysis_key,
+                            ticket_payload=ticket_payload,
+                            context=context_extras or {},
+                            wait_for=tuple(job.wait_for),
+                            priority=int(priority),
+                            submitted_at=job.submitted_at,
+                        )
+                    )
+                except Exception:
+                    pass
             return job_id
 
     def has_pending(self) -> bool:
@@ -661,6 +709,19 @@ class AnalysisManager:
             context={"job_id": job_id, "analysis": job.analysis_key},
         )
 
+        bus = _get_event_bus()
+        if bus and JobStartedEvent is not None:
+            try:
+                bus.publish(
+                    JobStartedEvent(
+                        job_id=job.job_id,
+                        analysis_key=job.analysis_key,
+                        started_at=state.started_at or datetime.utcnow(),
+                    )
+                )
+            except Exception:
+                pass
+
         registration = self._registry[job.analysis_key]
         call_kwargs = dict(registration.default_kwargs)
         call_kwargs.update(job.runtime_kwargs)
@@ -688,6 +749,17 @@ class AnalysisManager:
                 "Analysis job failed",
                 context={"job_id": job_id, "analysis": job.analysis_key},
             )
+            if bus and JobFailedEvent is not None:
+                try:
+                    bus.publish(
+                        JobFailedEvent(
+                            job_id=job.job_id,
+                            analysis_key=job.analysis_key,
+                            error=str(exc),
+                        )
+                    )
+                except Exception:
+                    pass
             raise
 
         ended = datetime.utcnow()
@@ -728,6 +800,32 @@ class AnalysisManager:
                 "ticket_sha": ticket_sha,
             },
         )
+
+        receipt_summary = self._receipt_summary(receipt) if receipt is not None else None
+        if bus and JobCompletedEvent is not None:
+            try:
+                bus.publish(
+                    JobCompletedEvent(
+                        job_id=job.job_id,
+                        analysis_key=job.analysis_key,
+                        ticket_sha=ticket_sha,
+                        started_at=started_at,
+                        ended_at=ended,
+                        receipt_summary=receipt_summary,
+                    )
+                )
+                if receipt and ReceiptAddedEvent is not None:
+                    bus.publish(
+                        ReceiptAddedEvent(
+                            job_id=job.job_id,
+                            analysis_key=job.analysis_key,
+                            ticket_sha=ticket_sha,
+                            receipt_summary=receipt_summary,
+                        )
+                    )
+            except Exception:
+                pass
+
         return receipt
 
     def _dependencies_satisfied(self, job: AnalysisJob) -> bool:
@@ -889,7 +987,32 @@ class AnalysisManager:
         finally:
             self._vsp_lock.release()
 
+    def _receipt_summary(self, receipt: Receipt) -> Dict[str, Any]:
+        summary: Dict[str, Any] = {}
+        try:
+            # Minimal safe subset
+            summary['cls'] = f"{receipt.__class__.__name__}"
+            if hasattr(receipt, 'artifact_dir'):
+                summary['artifact_dir'] = getattr(receipt, 'artifact_dir')
+            if hasattr(receipt, 'run_manifest') and getattr(receipt, 'run_manifest') is not None:
+                rm = getattr(receipt, 'run_manifest')
+                summary['started_utc'] = getattr(rm, 'started_utc', None)
+                summary['ended_utc'] = getattr(rm, 'ended_utc', None)
+            # Selected known metrics
+            for attr in ('static_margin', 'total_cd'):
+                if hasattr(receipt, attr):
+                    val = getattr(receipt, attr)
+                    if val is not None:
+                        summary[attr] = val
+        except Exception:
+            summary['error'] = 'summary_failed'
+        return summary
 
-# ----------------------------------------------------------------------
-
+    def shutdown(self):
+        """Gracefully shutdown manager worker resources (placeholder).
+        If future asynchronous worker threads are added, join them here.
+        Safe to call multiple times.
+        """
+        # Currently no background threads spawned by AnalysisManager; placeholder for future.
+        self._logger.debug("AnalysisManager shutdown invoked")
 

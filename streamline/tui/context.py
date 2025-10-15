@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from ..core.schema import ProjectDefinition
 from ..io.config_catalog import ConfigSummary
@@ -19,7 +19,6 @@ def _utcnow() -> datetime:
 @dataclass
 class SessionJob:
     """Track a job submitted through the AnalysisManager."""
-
     job_id: str
     analysis_key: str
     ticket_payload: Dict[str, Any]
@@ -31,32 +30,35 @@ class SessionJob:
     ticket_sha: Optional[str] = None
     receipt: Optional[Receipt] = None
     error: Optional[str] = None
-    finished: bool = False
 
 
 @dataclass
 class SessionState:
-    """Aggregate representation of the data the TUI needs."""
-
-    project_root: Path
-    project_id: str
-    project_def: ProjectDefinition
+    project_root: Optional[Path] = None
+    project_id: Optional[str] = None
+    project_def: Optional[ProjectDefinition] = None
     config_catalog: List[ConfigSummary] = field(default_factory=list)
     op_catalog: List[OperatingPointSummary] = field(default_factory=list)
     cache_entries: List[Dict[str, Any]] = field(default_factory=list)
     results_index: List[ResultIndexEntry] = field(default_factory=list)
     jobs: Dict[str, SessionJob] = field(default_factory=dict)
+    config_signatures: Dict[str, str] = field(default_factory=dict)
+    config_provenance: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    config_metadata_paths: Dict[str, Optional[Path]] = field(default_factory=dict)
+    op_signatures: Dict[str, str] = field(default_factory=dict)
+    op_metadata: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    stale_configs: Dict[str, Tuple[str, ...]] = field(default_factory=dict)
+    mode_drift_configs: Dict[str, Tuple[str, ...]] = field(default_factory=dict)
 
 
 @dataclass
 class SessionConfig:
-    """User-configurable knobs controlling a project session."""
-
     projects_root: Path
     project_id: str
     open_gui: bool = False
     auto_start_workers: bool = True
 
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "projects_root", Path(self.projects_root))
+    @property
+    def project_root(self) -> Path:
+        return self.projects_root / self.project_id
 

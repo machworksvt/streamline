@@ -4,5 +4,10 @@
         "tests"
     ],
     "python.testing.unittestEnabled": false,
-    "python.testing.pytestEnabled": true
+    "python.testing.pytestEnabled": true,
+    "python.analysis.extraPaths": [
+        "${workspaceFolder}/OpenVSP-3.46.0-win64/python",
+        "${workspaceFolder}/OpenVSP-3.46.0-win64/python/openvsp",
+        "${workspaceFolder}/OpenVSP-3.46.0-win64/python/openvsp_config"
+    ]
 }
