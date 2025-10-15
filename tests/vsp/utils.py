@@ -16,9 +16,8 @@ def assert_has_minimal_api(vsp):
 
 
 def enumerate_parms(vsp, geom_id: str) -> List[ParmInfo]:
-    ids: Sequence[str]
     try:
-        ids = list(vsp.GetParmIDs(geom_id))  # type: ignore[attr-defined]
+        ids: Sequence[str] = list(vsp.GetGeomParmIDs(geom_id))  # type: ignore[attr-defined]
     except Exception:
         return []
 
@@ -117,5 +116,6 @@ def find_geom_ids(vsp, name: str) -> List[str]:
     if result is None:
         return []
     if isinstance(result, (list, tuple)):
-        return [str(x) for x in result]
-    return [str(result)]
+        return [str(x) for x in result if str(x)]
+    result_str = str(result)
+    return [result_str] if result_str else []
