@@ -3,9 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from streamline.core.errors import VSPSessionError
 
 from streamline.vsp.session import import_vsp
-
 from .utils import (
     assert_parm_changes,
     enumerate_parms,
@@ -165,7 +165,10 @@ def test_import_vsp_promotes_module_namespace():
     """Updated: import_vsp now returns the concrete API module; root namespace may stay bare.
     We verify the returned object has required symbols. Namespace exposure is optional.
     """
-    vsp = import_vsp()
+    try:
+        vsp = import_vsp()
+    except VSPSessionError as exc:
+        pytest.skip(f"OpenVSP runtime unavailable: {exc.message}")
     import openvsp  # type: ignore
 
     assert hasattr(vsp, "AddGeom"), "import_vsp() must return module with AddGeom"

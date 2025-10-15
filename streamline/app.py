@@ -38,7 +38,7 @@ from .tui.events import (
     JobStartedEvent,
     JobSubmittedEvent,
     ReceiptAddedEvent,
-    LOG_MESSAGE,
+    LogMessageEvent,
 )
 from .vsp import session as vsp_session
 from .main import create_new_project  # reuse project scaffolder
@@ -55,9 +55,9 @@ class EventBusLogHandler(logging.Handler):
         if not bus:
             return
         try:
-            bus.emit(LOG_MESSAGE, {
-                'level': record.levelname,
-                'name': record.name,
+            bus.publish(LogMessageEvent(level=record.levelname, name=record.name, message=record.getMessage()))
+        except Exception:
+            pass
                 'message': record.getMessage(),
             })
         except Exception:
@@ -480,7 +480,7 @@ class StreamlineApp(App):
         if isinstance(
             evt,
             (
-                JobSubmittedEvent,
+                JobSubmittedEvent, 
                 JobStartedEvent,
                 JobCompletedEvent,
                 JobFailedEvent,
@@ -515,12 +515,8 @@ class StreamlineApp(App):
             self._mark_refresh('configs')
             return
 
-        et = getattr(evt, 'type', None)
-        payload = getattr(evt, 'payload', {})
-        if et == LOG_MESSAGE:
-            msg = payload.get('message')
-            lvl = payload.get('level')
-            self._schedule_log_append(msg, level=lvl)
+        if isinstance(evt, LogMessageEvent):
+            self._schedule_log_append(evt.message, level=evt.level)
         # Future: op catalog change events -> self._mark_refresh('ops')
 
     def _schedule_log_append(self, text: str, level: str | None = None):

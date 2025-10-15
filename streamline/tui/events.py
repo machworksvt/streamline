@@ -8,34 +8,6 @@ import time
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
-
-# Legacy string identifiers (maintained for backward compatibility only)
-CATALOG_CHANGED = "CatalogChanged"
-CONFIGURATION_CREATED = "ConfigurationCreated"
-CONFIGURATION_UPDATED = "ConfigurationUpdated"
-CONFIGURATION_STALE = "ConfigurationStale"
-JOB_SUBMITTED = "JobSubmitted"
-JOB_STARTED = "JobStarted"
-JOB_COMPLETED = "JobCompleted"
-JOB_FAILED = "JobFailed"
-RECEIPT_ADDED = "ReceiptAdded"
-DERIVED_DATA_UPDATED = "DerivedDataUpdated"
-LOG_MESSAGE = "LogMessage"
-
-ALL_EVENT_TYPES = {
-    CATALOG_CHANGED,
-    CONFIGURATION_CREATED,
-    CONFIGURATION_UPDATED,
-    CONFIGURATION_STALE,
-    JOB_SUBMITTED,
-    JOB_STARTED,
-    JOB_COMPLETED,
-    JOB_FAILED,
-    RECEIPT_ADDED,
-    DERIVED_DATA_UPDATED,
-    LOG_MESSAGE,
-}
-
 @dataclass(frozen=True)
 class Event:
     type: str = ""  # auto-filled with class name if empty
@@ -46,14 +18,6 @@ class Event:
             object.__setattr__(self, 'type', self.__class__.__name__)
     def get(self, key: str, default: Any = None) -> Any:
         return self.payload.get(key, default)
-
-# Convenience constructors
-def build_event(evt_type: str, payload: Optional[Dict[str, Any]] = None, *, ts_provider=None) -> Event:
-    import time
-    if evt_type not in ALL_EVENT_TYPES:
-        # Allow extension without crashing; could log a warning
-        pass
-    return Event(type=evt_type, payload=payload or {}, ts=(ts_provider() if ts_provider else time.time()))
 
 
 @dataclass(frozen=True)
@@ -163,6 +127,13 @@ class ReceiptAddedEvent(JobEvent):
     receipt_summary: Optional[Dict[str, Any]] = None
 
 
+@dataclass(frozen=True)
+class LogMessageEvent(ManagerEvent):
+    level: str = ""
+    name: str = ""
+    message: str = ""
+
+
 # ---------------------------------------------------------------------------
 # Catalog / configuration events
 # ---------------------------------------------------------------------------
@@ -202,3 +173,4 @@ class ConfigurationRemovedEvent(ConfigurationEvent):
 @dataclass(frozen=True)
 class ConfigurationStaleEvent(ConfigurationEvent):
     errors: Tuple[str, ...] = tuple()
+

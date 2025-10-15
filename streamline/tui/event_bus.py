@@ -5,7 +5,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Callable, Dict, Iterable, Optional, Type, TypeVar
 
-from .events import Event, build_event
+from .events import Event
 
 EventT = TypeVar("EventT", bound=Event)
 
@@ -101,9 +101,3 @@ class EventBus:
                 return
             for event_type in event_types:
                 self._subscribers.pop(event_type, None)
-
-    def emit(self, event_type: str, payload: dict | None = None):
-        """Legacy helper for string-based events."""
-
-        evt = build_event(event_type, payload)
-        self.publish(evt)
