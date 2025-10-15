@@ -571,7 +571,7 @@ def _handle_configs(args):
     project_root = Path('projects') / args.project_id
     if args.configs_action == 'list':
         catalog = config_catalog.load_config_catalog(project_root)
-        for cfg in catalog.configs:
+        for cfg in catalog:
             print(cfg.config_id, cfg.geom_set_name or '-', 'mode=' + (cfg.mode.mode_id if cfg.mode else '-'))
         return 0
     # Acquire / init analysis manager (reusing smoke style init)
