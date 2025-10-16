@@ -9,7 +9,7 @@ from ..core.schema import ProjectDefinition
 from ..io.config_catalog import ConfigSummary
 from ..io.op_catalog import OperatingPointSummary
 from ..io.results_index import ResultIndexEntry
-from ..vsp.contracts.base import Receipt
+from ..analysis.contracts import Receipt
 
 
 def _utcnow() -> datetime:

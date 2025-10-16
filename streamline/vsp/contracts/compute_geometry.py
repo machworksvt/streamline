@@ -6,7 +6,7 @@ from typing import Optional, Dict, Any, Literal, List, Tuple
 
 from pydantic import Field
 
-from .base import Ticket, Receipt
+from ...analysis.contracts import Receipt, Ticket
 
 
 class ComputeGeometryTicket(Ticket):

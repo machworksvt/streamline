@@ -16,7 +16,7 @@ from ..io.config_catalog import get_configuration, load_config_catalog
 from ..io.op_catalog import load_op_catalog
 from ..io.results_index import ResultIndexEntry, load_result_entries
 from ..io.fs import load_config, load_project_def
-from ..vsp.contracts.base import Ticket
+from ..analysis.contracts import Ticket
 from ..vsp.configure import (
     ConfigurationIntrospectionError,
     configuration_from_mode,

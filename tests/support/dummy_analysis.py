@@ -7,7 +7,7 @@ from typing import Any, Dict
 from streamline.analysis.manager import AnalysisManager
 from streamline.core.schema import RunManifest
 from streamline.io.results_index import ResultIndexEntry, append_result_entry
-from streamline.vsp.contracts.base import Receipt, Ticket
+from streamline.analysis.contracts import Ticket, Receipt
 from streamline.vsp.run_utils import dump_json, prepare_results_dir, relativize
 
 

@@ -1,0 +1,349 @@
+Screen {
+    layout: vertical;
+    background: #000000;
+    color: #39ff14;
+}
+
+#project_header {
+    min-height: 1;
+    padding: 0 1;
+    background: #000000;
+    color: #9bffc7;
+    text-style: bold;
+    border-bottom: solid #24ff64;
+}
+
+#layout_main {
+    layout: vertical;
+    height: 1fr;
+    background: #000000;
+}
+
+#primary_switcher {
+    height: 1fr;
+}
+
+#primary_switcher > * {
+    height: 1fr;
+}
+
+#main_tabs {
+    background: #000000;
+    border-bottom: solid #24ff64;
+}
+
+Tabs {
+    background: #000000;
+    color: #39ff14;
+}
+
+Static {
+    color: #39ff14;
+}
+
+Tabs Tab {
+    background: transparent;
+    color: #39ff14;
+    border-right: none;
+}
+
+Tabs Tab:focus {
+    text-style: bold;
+    border-bottom: double #24ff64;
+}
+
+Tabs Tab:hover {
+    text-style: bold;
+}
+
+Tabs Tab.-active .tab--label,
+Tabs Tab.-active Label,
+Tabs Tab.active .tab--label,
+Tabs Tab.active Label {
+    text-style: bold;
+}
+
+Tabs:focus Tab.-active,
+Tabs:focus Tab.active {
+    background: #39ff14;
+    color: #000000;
+}
+
+#main_switcher {
+    height: 1fr;
+    background: #000000;
+}
+
+#log_panel {
+    height: 30%;
+    min-height: 6;
+    border: solid #24ff64;
+    background: #000000;
+}
+
+#log_panel.collapsed {
+    height: 3;
+    min-height: 3;
+}
+
+#log_panel.collapsed #log_body {
+    display: none;
+}
+
+#log_header {
+    padding: 0 1;
+    background: #000000;
+    color: #39ff14;
+    text-style: bold;
+    border-bottom: solid #24ff64;
+}
+
+#log_header:hover {
+    text-style: underline bold;
+}
+
+#log_body {
+    height: 1fr;
+    background: #000000;
+    color: #39ff14;
+}
+
+RichLog {
+    background: #000000;
+}
+
+Footer {
+    height: auto;
+    min-height: 1;
+    background: #000000;
+    color: #9bffc7;
+    border-top: solid #24ff64;
+}
+
+FooterKey {
+    background: #000000;
+    color: #9bffc7;
+}
+
+FooterKey .footer-key--key {
+    background:rgb(0, 0, 0);
+    color: #9bffc7;
+    text-style: bold;
+}
+
+FooterKey .footer-key--description {
+    color: #39ff14;
+    background: #000000;
+}
+
+FooterLabel {
+    color: #9bffc7;
+    background: #000000;
+    text-style: bold;
+}
+
+Input {
+    background: #000000;
+    color: #39ff14;
+    border: solid #24ff64;
+}
+
+Input:focus {
+    border: double #24ff64;
+}
+
+ListView {
+    background: #000000;
+    color: #39ff14;
+    border: solid #24ff64;
+}
+
+ListItem {
+    background: transparent;
+    color: #39ff14;
+}
+
+ListItem.-highlight {
+    color: #ffffff;
+    text-style: bold;
+    border-left: solid #24ff64;
+}
+
+#project_selector {
+    layout: vertical;
+    height: 1fr;
+    padding: 1 2;
+    background: #000000;
+    border: solid #24ff64;
+}
+
+#project_selector_hint {
+    color: #72ffab;
+    text-style: bold;
+    margin: 0 0 1 0;
+}
+
+#project_selector_list {
+    height: 1fr;
+    border: solid #24ff64;
+    background: #000000;
+}
+
+#project_selector_list ListItem {
+    border-left: none;
+    padding: 0 1;
+}
+
+#project_selector_list ListItem.-highlight {
+    background: #001807;
+    color: #24ff64;
+    border-left: solid #24ff64;
+}
+
+#project_selector_list ListItem.-highlight Static {
+    text-style: bold;
+}
+
+#new_project_view {
+    layout: vertical;
+    height: 1fr;
+    align-horizontal: center;
+    align-vertical: middle;
+    background: #000000;
+    border: solid #24ff64;
+    padding: 2 4;
+}
+
+#new_project_hint {
+    color: #72ffab;
+    text-style: bold;
+}
+
+#new_project_view Input {
+    width: 32;
+    border: solid #24ff64;
+    background: #000000;
+    color: #9bffc7;
+}
+
+Toast {
+    padding: 0 0 0 0;
+    background: #24ff64;
+    color: #001807;
+    border: solid #24ff64;
+}
+
+ToastRack {
+    align: right top;
+    dock: top;
+    background: transparent;
+}
+
+CommandPalette {
+    color: #9bffc7;
+    background: #000000ee;
+}
+
+CommandPalette > Vertical {
+    margin-top: 3;
+    height: 100%;
+    visibility: hidden;
+    background: #000000;
+    border: solid #24ff64;
+}
+
+CommandPalette.-ready > Vertical {
+    visibility: visible;
+}
+
+CommandPalette #--input {
+    height: auto;
+    visibility: visible;
+    background: #000000;
+    border: solid #24ff64;
+    padding: 0 1;
+    layout: horizontal;
+    align-vertical: middle;
+}
+
+CommandPalette #--input.--list-visible {
+    border-bottom: none;
+}
+
+CommandPalette #--input Label {
+    color: #72ffab;
+    margin: 0;
+    align-vertical: middle;
+    height: 1;
+}
+
+CommandPalette #--input Button {
+    background: #24ff64;
+    color: #001807;
+    border: solid #24ff64;
+    text-style: bold;
+    margin-left: 1;
+    height: 1;
+}
+
+CommandInput,
+CommandInput:focus {
+    border: none;
+    background: transparent;
+    width: 1fr;
+    padding-left: 0;
+    background-tint: 0%;
+    color: #9bffc7;
+}
+
+CommandPalette #--results {
+    overlay: screen;
+    height: auto;
+    background: #000000;
+    border: solid #24ff64;
+}
+
+CommandPalette OptionList {
+    background: transparent;
+    color: #9bffc7;
+    border: none;
+}
+
+CommandPalette OptionList:focus {
+    border: none;
+    background: #000000;
+}
+
+CommandPalette OptionList > .option-list--option-highlighted {
+    color: #001807;
+    background: #24ff64;
+    text-style: bold;
+}
+
+CommandPalette OptionList > .option-list--option-hover {
+    background: #043114;
+}
+
+CommandPalette OptionList > .option-list--separator {
+    color: #24ff64;
+}
+
+CommandPalette > .command-palette--help-text {
+    color: #39ff14;
+    background: transparent;
+    text-style: italic;
+}
+
+CommandPalette > .command-palette--highlight {
+    color: #24ff64;
+    text-style: bold underline;
+}
+
+CommandPalette LoadingIndicator {
+    background: #000000;
+    border-bottom: solid #24ff64;
+}
+
+CommandPalette LoadingIndicator.--visible {
+    color: #24ff64;
+}

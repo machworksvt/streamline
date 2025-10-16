@@ -8,7 +8,7 @@ import pytest
 from streamline.analysis.manager import AnalysisManager
 from streamline.io.cache_store import CacheRecord, save_cache_records
 from streamline.io.results_index import load_result_entries
-from streamline.vsp.contracts.base import Ticket
+from streamline.analysis.contracts import Ticket
 
 from tests.support.dummy_analysis import DummyReceipt, register_dummy_analysis
 

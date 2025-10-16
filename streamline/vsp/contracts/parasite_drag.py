@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, Literal, List, Tuple
 from pydantic import Field
 import pandas as pd
-from .base import Ticket, Receipt
+from ...analysis.contracts import Receipt, Ticket
 
 class ParasiteDragTicket(Ticket):
     """Inputs for the VSPAERO 'ParasiteDrag' analysis."""

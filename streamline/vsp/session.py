@@ -2,16 +2,110 @@
 
 from __future__ import annotations
 
+import importlib
 import os
 import sys
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Dict, Optional, Any
 
 from ..core.errors import VSPSessionError
 from ..core.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+def _set_graphics_flags(enable: bool) -> None:
+    """Set OpenVSP loader flags before importing the module."""
+    try:
+        import openvsp_config  # type: ignore
+
+        openvsp_config.LOAD_FACADE = bool(enable)
+        openvsp_config.LOAD_GRAPHICS = bool(enable)
+        if hasattr(openvsp_config, "LOAD_MULTI_FACADE"):
+            # Explicitly disable multi facade so single GUI loads reliably
+            openvsp_config.LOAD_MULTI_FACADE = False
+    except Exception:
+        # If the config shim is unavailable we continue; import will fall back
+        pass
+
+
+def _prepend_env_path(var: str, value: str) -> None:
+    current = os.environ.get(var)
+    if not current:
+        os.environ[var] = value
+        return
+    if value in current.split(os.pathsep):
+        return
+    os.environ[var] = f"{value}{os.pathsep}{current}"
+
+
+def _ensure_vendor_paths() -> None:
+    """Add bundled OpenVSP python/bin directories to sys.path and PATH.
+
+    Allows invoking Streamline from terminals that haven't explicitly set
+    PYTHONPATH/PATH for the vendor bundle.
+    """
+    repo_root = Path(__file__).resolve().parents[2]
+    candidates: list[Path] = []
+    env_root = os.environ.get("OPENVSP_ROOT")
+    if env_root:
+        root_path = Path(env_root).expanduser()
+        if root_path.exists():
+            candidates.append(root_path)
+    # Heuristic: prefer newest-looking OpenVSP-* directory under repo root
+    for child in sorted(repo_root.glob("OpenVSP-*"), reverse=True):
+        if child.is_dir():
+            candidates.append(child)
+    seen_python = False
+    modules_cleared = False
+    for root in candidates:
+        python_dir = root / "python"
+        if not python_dir.exists():
+            continue
+        # Inject python directories
+        extras = (
+            python_dir,
+            python_dir / "openvsp",
+            python_dir / "openvsp_config",
+            python_dir / "utilities",
+            python_dir / "utilities" / "utilities",
+        )
+        for extra in reversed(extras):
+            if extra.exists():
+                path_str = str(extra)
+                if path_str not in sys.path:
+                    sys.path.insert(0, path_str)
+        # Ensure DLLs are discoverable
+        bin_dir = root / "bin"
+        if bin_dir.exists():
+            _prepend_env_path("PATH", str(bin_dir))
+        seen_python = True
+        # Purge any pre-imported stubs so the real bindings win on next import
+        for name in list(sys.modules.keys()):
+            if name == "openvsp" or name.startswith("openvsp."):
+                sys.modules.pop(name, None)
+                modules_cleared = True
+            if name == "utilities" or name.startswith("utilities."):
+                sys.modules.pop(name, None)
+        break
+    if not seen_python:
+        logger.debug("OpenVSP vendor bundle python directory not found; relying on environment")
+    else:
+        if modules_cleared:
+            logger.debug("Cleared cached openvsp/utilities modules to ensure vendor bindings load")
+        # Guarantee the vendor utilities package is importable as `utilities`
+        try:
+            vendor_utilities = importlib.import_module("utilities.utilities")
+        except ModuleNotFoundError:
+            pass
+        else:
+            sys.modules.setdefault("utilities.utilities", vendor_utilities)
+            sys.modules["utilities"] = vendor_utilities
+
+
+_ensure_vendor_paths()
 
 
 @dataclass
@@ -34,13 +128,7 @@ def _with_clean_argv(importer):
 def _import_with_flags(load_graphics: bool | None):
     def _do():
         if load_graphics is not None:
-            try:
-                import openvsp_config  # type: ignore
-
-                openvsp_config.LOAD_GRAPHICS = bool(load_graphics)
-                openvsp_config.LOAD_FACADE = bool(load_graphics)
-            except Exception:
-                pass
+            _set_graphics_flags(bool(load_graphics))
         import openvsp as _vsp
 
         return _vsp
@@ -51,11 +139,11 @@ def _import_with_flags(load_graphics: bool | None):
 def _import_openvsp_graphics(attempt_graphics: bool):
     """Attempt to load OpenVSP."""
 
-    attempts: list[tuple[str, bool | None]] = [("openvsp (default)", None)]
+    attempts: list[tuple[str, bool | None]] = []
     if attempt_graphics:
         attempts.append(("openvsp (graphics)", True))
-    else:
-        attempts.append(("openvsp (headless)", False))
+    attempts.append(("openvsp (default)", None))
+    attempts.append(("openvsp (headless)", False))
 
     tried: list[str] = []
     for label, load_flag in attempts:
@@ -100,13 +188,10 @@ def supports_gui(vsp) -> bool:
     # Require both start symbol and a positive IsGUIBuild() when available.
     if vsp is None:
         return False
-    if hasattr(vsp, 'IsGUIBuild'):
-        try:
-            if not bool(vsp.IsGUIBuild()):  # headless build or graphics disabled
-                return False
-        except Exception:
-            pass
-    return any(hasattr(vsp, attr) for attr in ("StartGUI", "StartGui"))
+    has_start = any(hasattr(vsp, attr) for attr in ("StartGUI", "StartGui"))
+    if not has_start:
+        return False
+    return True
 
 
 # Diagnostic helper to inspect environment and attempt GUI relaunch
@@ -123,6 +208,7 @@ def ensure_gui_started(vsp, *, strict: bool = False):  # pragma: no cover - side
     if is_headless(vsp):
         logger.info("Skipping GUI start: headless binding detected")
         return False
+    _set_graphics_flags(True)
     try:
         import openvsp_config  # type: ignore
         load_graphics = getattr(openvsp_config, 'LOAD_GRAPHICS', None)
@@ -199,13 +285,8 @@ def start_gui(vsp, *, strict: bool = False, block: bool = False, hold_seconds: f
         },
     )
     if gui_build is False:
-        msg = "Binding reports IsGUIBuild()==False (headless build); GUI cannot be started"
-        if strict:
-            err = VSPSessionError("Headless OpenVSP build in use", hint=msg)
-            logger.error(err.message, code=err.code, hint=err.hint)
-            raise err
+        msg = "Binding reports IsGUIBuild()==False; attempting GUI start anyway"
         logger.warning(msg)
-        return False
 
     _call_if_exists(vsp, "EnableStopGUIMenuItem")
     _maybe_init_gui(vsp)
@@ -218,6 +299,8 @@ def start_gui(vsp, *, strict: bool = False, block: bool = False, hold_seconds: f
                 getattr(vsp, name)()
                 launched = True
                 logger.debug("Invoked GUI start", context={'symbol': name})
+                if hasattr(vsp, "EnableStopGUIMenuItem"):
+                    _call_if_exists(vsp, "EnableStopGUIMenuItem")
                 break
             except Exception as exc:  # pragma: no cover
                 launch_exc = exc

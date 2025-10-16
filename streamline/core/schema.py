@@ -68,6 +68,7 @@ class OperatingPoint(BaseModel):
     mach: Optional[float] = None
     tas_mps: Optional[float] = None
     mass_override_kg: Optional[float] = None
+    # TODO: inertia override?
     atmosphere_overrides: Dict[str, float] = Field(default_factory=dict)  # {"rho_kgm3":..., "a_mps":...}
     notes: str = ""
 

@@ -7,7 +7,7 @@ from typing import Optional, Dict, Any, List, Literal, Tuple
 import pandas as pd
 from pydantic import Field
 
-from .base import Ticket, Receipt
+from ...analysis.contracts import Receipt, Ticket
 
 
 class StabilityTicket(Ticket):

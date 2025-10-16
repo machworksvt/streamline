@@ -6,8 +6,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from pydantic import Field
 
-from .base import Ticket, Receipt
-
+from ...analysis.contracts import Receipt, Ticket
 
 class CompGeomTicket(Ticket):
     """Inputs for running the OpenVSP ``CompGeom`` analysis."""

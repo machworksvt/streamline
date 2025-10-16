@@ -19,26 +19,34 @@ from ..tui.events import (
     ConfigurationStaleEvent,
 )
 
-try:  # Replace direct import with session-based resolution first
-    def _get_vsp_module():
-        """Obtain the active openvsp module from session; fall back to prior import if needed."""
-        # Preferred: dedicated accessor
-        get_vsp = getattr(_session, "get_vsp", None)
-        if callable(get_vsp):
-            mod = get_vsp()
-            if mod is not None:
-                return mod
-        # Fallback attributes
-        for attr in ("vsp", "_vsp", "module"):
-            mod = getattr(_session, attr, None)
-            if mod is not None:
-                return mod
-        # Ultimate fallback: previously imported global (may be None)
-        return globals().get("vsp")
 
-    vsp = _get_vsp_module()  # rebind global reference dynamically
-except Exception:  # pragma: no cover
-    pass
+def _get_vsp_module():
+    """Obtain the active openvsp module from session; fall back to prior import if needed."""
+    # Prefer already-initialized bindings on the session module
+    for attr in ("_ACTIVE_VSP", "vsp", "_vsp", "module"):
+        mod = getattr(_session, attr, None)
+        if mod is not None:
+            return mod
+    get_vsp = getattr(_session, "get_vsp", None)
+    if callable(get_vsp):
+        mod = get_vsp()
+        if mod is not None:
+            return mod
+    # Ultimate fallback: previously imported global (may be None)
+    return globals().get("vsp")
+
+
+vsp: Optional[Any] = None
+
+
+def _ensure_vsp():
+    global vsp
+    if vsp is None:
+        try:
+            vsp = _get_vsp_module()
+        except Exception:
+            vsp = None
+    return vsp
 
 
 @dataclass
@@ -72,9 +80,10 @@ class ModeDetails:
 
 def _safe(callable_name: str, *args, default=None):
     """Call a vsp function if available; return default on failure."""
-    if vsp is None:
+    module = _ensure_vsp()
+    if module is None:
         return default
-    fn = getattr(vsp, callable_name, None)
+    fn = getattr(module, callable_name, None)
     if not fn:
         return default
     try:
@@ -552,7 +561,7 @@ def load_configuration_metadata(config_path: Path) -> Dict[str, Any]:
 
 
 def register_current_configuration(project_root: Path, config_id: str, preferred_set: Optional[str] = None) -> Configuration:
-    if vsp is None:
+    if _ensure_vsp() is None:
         raise ConfigurationIntrospectionError("OpenVSP bindings not available; cannot register configuration.")
     snapshot = snapshot_current_configuration(preferred_set=preferred_set)
     model = build_configuration_model(config_id, snapshot)
@@ -572,7 +581,7 @@ def configuration_from_mode(
     notes: Optional[str] = None,
     use_mode_flag: Optional[bool] = None,
 ) -> Configuration:
-    if vsp is None:
+    if _ensure_vsp() is None:
         raise ConfigurationIntrospectionError("OpenVSP bindings not available; cannot build configuration from mode.")
     details = get_mode_details(mode_id)
     if details is None:

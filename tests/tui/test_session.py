@@ -16,7 +16,7 @@ from streamline.tui import (
     SessionConfig,
 )
 from streamline.tui.events import SessionEvent
-from streamline.vsp.contracts.base import Ticket
+from streamline.analysis.contracts import Ticket
 
 from tests.support.dummy_analysis import register_dummy_analysis
 

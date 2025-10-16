@@ -7,7 +7,7 @@ import pytest
 
 from streamline.analysis.manager import AnalysisManager
 from streamline.core.schema import RunManifest
-from streamline.vsp.contracts.base import Receipt, Ticket
+from streamline.analysis.contracts import Ticket, Receipt
 
 
 class DummyReceipt(Receipt):

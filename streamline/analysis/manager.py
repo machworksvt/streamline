@@ -21,7 +21,8 @@ from ..io.results_index import (
     load_result_entries,
     remove_result_entries,
 )
-from ..vsp.contracts.base import Receipt, Ticket
+
+from .contracts import Receipt, Ticket
 from ..vsp.contracts.compute_geometry import ComputeGeometryReceipt
 from ..vsp.contracts.comp_geom import CompGeomReceipt
 from ..vsp.contracts.parasite_drag import ParasiteDragReceipt

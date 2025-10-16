@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 from typing import Optional
 
-from ..vsp.contracts.base import Receipt, Ticket
+from ..analysis.contracts import Receipt, Ticket
 from .manager import AnalysisManager
 
 
