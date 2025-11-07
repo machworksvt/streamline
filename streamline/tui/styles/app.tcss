@@ -227,16 +227,35 @@ ListItem.-highlight {
 }
 
 Toast {
-    padding: 0 0 0 0;
+    padding: 0 1;
+    min-height: 1;
+    border: none;
+}
+
+/* Information toasts (default and success) */
+Toast.-information {
     background: #24ff64;
     color: #001807;
-    border: solid #24ff64;
+}
+
+/* Warning toasts */
+Toast.-warning {
+    background: #ffaa00;
+    color: #000000;
+}
+
+/* Error toasts */
+Toast.-error {
+    background: #ff0000;
+    color: #ffffff;
 }
 
 ToastRack {
     align: right top;
     dock: top;
     background: transparent;
+    padding: 0;
+    margin: 0;
 }
 
 CommandPalette {
@@ -273,8 +292,10 @@ CommandPalette #--input.--list-visible {
 CommandPalette #--input Label {
     color: #72ffab;
     margin: 0;
-    align-vertical: middle;
-    height: 1;
+    padding: 0;
+    width: auto;
+    height: auto;
+    content-align: center middle;
 }
 
 CommandPalette #--input Button {
@@ -346,4 +367,94 @@ CommandPalette LoadingIndicator {
 
 CommandPalette LoadingIndicator.--visible {
     color: #24ff64;
+}
+
+/* Jobs Panel Styling */
+#jobs_panel {
+    height: auto;
+}
+
+#jobs_header {
+    padding: 0 1;
+    background: #000000;
+    color: #9bffc7;
+    text-style: bold;
+    border-bottom: solid #24ff64;
+}
+
+#jobs_list {
+    height: 1fr;
+    background: #000000;
+    border: none;
+    padding: 0;
+}
+
+#jobs_list > JobListItem {
+    height: auto;
+    margin: 0;
+    padding: 0;
+}
+
+JobListItem {
+    height: auto;
+    padding: 0;
+}
+
+.job-summary {
+    height: auto;
+    min-height: 1;
+    padding: 0 1;
+    background: #000000;
+    border-bottom: solid #001807;
+}
+
+.job-summary:hover {
+    background: #001807;
+}
+
+.job-status {
+    width: 15;
+    height: auto;
+}
+
+.job-analysis {
+    width: 1fr;
+    height: auto;
+    color: #9bffc7;
+}
+
+.job-timer {
+    width: 10;
+    height: auto;
+    content-align: right middle;
+    color: #72ffab;
+}
+
+.job-details {
+    height: auto;
+    background: #000f05;
+    padding: 1 2;
+    border-bottom: solid #24ff64;
+    border-left: thick #24ff64;
+}
+
+.detail-header {
+    height: auto;
+    margin-top: 1;
+    text-style: bold;
+}
+
+.detail-content {
+    height: auto;
+    padding: 0 1;
+    margin-bottom: 1;
+    color: #72ffab;
+}
+
+.detail-error {
+    height: auto;
+    padding: 0 1;
+    margin-bottom: 1;
+    color: #ff5555;
+    text-style: bold;
 }

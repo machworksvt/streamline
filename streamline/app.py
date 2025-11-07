@@ -12,23 +12,31 @@ Goals (MVP):
 Formatting intentionally minimal; will iterate later.
 """
 
+import argparse
+import json
 import logging
+import os
+import sys
 from pathlib import Path
 from typing import Optional, List, Dict, Any, Callable, Iterable
 from time import time as _time
+from datetime import datetime, timezone
 
 from textual.app import App, ComposeResult, SystemCommand
-from textual.widgets import Static, Footer, Input, ListView, ListItem, Tabs, Tab, ContentSwitcher, RichLog
+from textual.widgets import Static, Footer, Input, ListView, ListItem, Tabs, Tab, ContentSwitcher, RichLog, Label
 from textual.reactive import reactive
 from rich.text import Text
+from rich.table import Table
+from rich import box
 from textual import events
-from textual.containers import Vertical
+from textual.containers import Vertical, Horizontal, VerticalScroll
 from textual.timer import Timer
 from textual.command import Provider, Hit, DiscoveryHit, Hits
 from textual.screen import Screen
 from textual.style import Style
 
 from .tui import ProjectSession, create_project_session
+from .tui.context import SessionJob
 from .tui.event_bus import get_global_event_bus, set_global_event_bus
 from .tui.events import (
     CatalogChangedEvent,
@@ -40,360 +48,116 @@ from .tui.events import (
     JobFailedEvent,
     JobStartedEvent,
     JobSubmittedEvent,
+    AnalysisJobQueued,
+    AnalysisJobStatusChanged,
     ReceiptAddedEvent,
     WorkerFailed,
     LogMessageEvent,
 )
+from .tui.widgets.jobs_panel import JobsPanel, JobListItem
+from .tui.widgets.ops_panel import OpsPanel
+from .tui.widgets.configs_panel import ConfigsPanel
+from .tui.widgets.collapsible_log import CollapsibleLog
+from .tui.widgets.project_header import ProjectHeader
+from .tui.widgets.project_views import ProjectSelectionView, NewProjectView, ProjectChosen
+from .tui.widgets.commands import ProjectCommandProvider
+from .core.logging import LoggingConfig, setup_logging
 from .vsp import session as vsp_session
 from .main import create_new_project  # reuse project scaffolder
 from .io.fs import load_project_def, load_config
-from .io.config_catalog import load_config_catalog
-from .io.op_catalog import load_op_catalog
+from .io.config_catalog import load_config_catalog, get_configuration
+from .io.op_catalog import load_op_catalog, get_operating_point
 from .vsp.configure import revalidate_existing_configs_with_lock
+from .vsp.contracts.stability import StabilityTicket
 
 # --- Log bridge ---
 
 class EventBusLogHandler(logging.Handler):
+    """Logging handler that publishes log records as LogMessageEvent to the event bus."""
+    
     def emit(self, record: logging.LogRecord) -> None:
         bus = get_global_event_bus()
         if not bus:
             return
         try:
-            bus.publish(LogMessageEvent(level=record.levelname,
-                                        name=record.name,
-                                        message=record.getMessage()))
+            # Extract structured context from the log record
+            context = getattr(record, "context", None)
+            hint = getattr(record, "hint", None)
+            error_code = getattr(record, "error_code", None)
+            
+            # Format exception info if present
+            exc_info = None
+            if record.exc_info:
+                import traceback
+                exc_info = ''.join(traceback.format_exception(*record.exc_info))
+            
+            bus.publish(
+                LogMessageEvent(
+                    level=record.levelname,
+                    name=record.name,
+                    message=record.getMessage(),
+                    timestamp=record.created,
+                    context=context if isinstance(context, dict) else None,
+                    hint=hint,
+                    error_code=error_code,
+                    exc_info=exc_info,
+                )
+            )
         except Exception:
-            pass
+            # Prevent logging errors from crashing the handler
+            self.handleError(record)
+
+
+def _resolve_logging_level(debug: bool, cli_level: Optional[str]) -> str:
+    if (debug):
+        return "DEBUG"
+    if (cli_level):
+        return cli_level.upper()
+    env_level = os.environ.get("STREAMLINE_LOG_LEVEL")
+    if (env_level):
+        return env_level.upper()
+    return "INFO"
+
+
+def _resolve_logfile(cli_logfile: Optional[str]) -> Optional[Path]:
+    source = cli_logfile or os.environ.get("STREAMLINE_LOG_FILE")
+    if (not source):
+        return None
+    return Path(source)
+
+
+def _install_event_log_bridge(level: int) -> None:
+    root_logger = logging.getLogger()
+    handler = next((h for h in root_logger.handlers if isinstance(h, EventBusLogHandler)), None)
+    if (handler is None):
+        handler = EventBusLogHandler()
+        root_logger.addHandler(handler)
+    handler.setLevel(level)
+    root_logger.setLevel(level)
+    streamline_logger = logging.getLogger("streamline")
+    streamline_logger.propagate = True
+    textual_logger = logging.getLogger("textual")
+    textual_logger.handlers.clear()
+    textual_logger.setLevel(level)
+    textual_logger.propagate = True
+
+
+def _configure_logging(debug: bool, cli_level: Optional[str], cli_logfile: Optional[str]) -> int:
+    level_name = _resolve_logging_level(debug, cli_level)
+    logfile = _resolve_logfile(cli_logfile)
+    level_key = level_name.upper()
+    if (level_key not in logging._nameToLevel):
+        raise SystemExit(f"Unknown log level '{level_name}'")
+    # Disable console logging for TUI - all logs go through EventBusLogHandler instead
+    config = LoggingConfig(level=level_key, logfile=logfile, propagate=True, console=False)
+    setup_logging(config, force=True)
+    resolved = logging._nameToLevel[level_key]
+    _install_event_log_bridge(resolved)
+    return resolved
 # --- Widgets ---
 
 class Placeholder(Static):
     pass
-
-class CollapsibleLog(Vertical):
-    collapsed: bool = reactive(False)  # type: ignore
-
-    def compose(self) -> ComposeResult:  # type: ignore
-        self._header = Static("Log", id="log_header")
-        self._header.can_focus = True
-        self._rich = RichLog(
-            id="log_body",
-            markup=True,
-            highlight=False,
-            auto_scroll=True,
-        )
-        yield self._header
-        yield self._rich
-
-    def on_mount(self) -> None:  # pragma: no cover - UI
-        self.set_class(False, "collapsed")
-        self._apply_collapse_state()
-
-    def toggle(self) -> None:
-        self.collapsed = not self.collapsed
-        self._apply_collapse_state()
-
-    def _apply_collapse_state(self) -> None:
-        self._rich.display = not self.collapsed
-        self.set_class(self.collapsed, "collapsed")
-        self._header.update("Log (hidden)" if self.collapsed else "Log")
-    def on_click(self, event: events.Click) -> None:  # pragma: no cover - UI
-        if event.control is self._header:
-            self.toggle()
-            event.stop()
-
-
-    def log(self, message: str, level: str | None = None) -> None:
-        tag = (level or "INFO").upper()
-        color = {
-            "DEBUG": "cyan",
-            "INFO": "green",
-            "WARNING": "yellow",
-            "WARN": "yellow",
-            "ERROR": "red",
-            "ERR": "red",
-            "CRITICAL": "red",
-        }.get(tag, "white")
-        styled_tag = f"[{color}][{tag}][/]"
-        self._rich.write(f"{styled_tag} {message}")
-
-
-class ProjectHeader(Static):
-    project_name: str = reactive("No project loaded")  # type: ignore
-    active_tab: str = reactive("Configs")  # type: ignore
-    job_summary: str = reactive("")  # type: ignore
-
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__("", *args, **kwargs)
-
-    def update_context(
-        self,
-        *,
-        project_id: Optional[str],
-        active_tab: Optional[str] = None,
-        running_jobs: Optional[int] = None,
-        total_jobs: Optional[int] = None,
-    ) -> None:
-        name = project_id or "No project loaded"
-        if name != self.project_name:
-            self.project_name = name
-        if active_tab:
-            self.active_tab = active_tab
-        if total_jobs is not None:
-            running = running_jobs or 0
-            summary = f"Jobs: {running} active / {total_jobs} total"
-            if summary != self.job_summary:
-                self.job_summary = summary
-        elif not project_id:
-            if self.job_summary:
-                self.job_summary = ""
-        self.refresh()
-
-    def watch_project_name(self, _: str) -> None:  # pragma: no cover - UI updates
-        self.refresh()
-
-    def watch_active_tab(self, _: str) -> None:  # pragma: no cover - UI updates
-        self.refresh()
-
-    def watch_job_summary(self, _: str) -> None:  # pragma: no cover - UI updates
-        self.refresh()
-
-    def render(self) -> Text:
-        style = "bold #9bffc7"
-        parts: List[str] = ["Streamline"]
-        if self.project_name:
-            parts.append(f"Project: {self.project_name}")
-        if self.job_summary:
-            parts.append(self.job_summary)
-        return Text(" | ".join(parts), style=style)
-
-class ConfigsPanel(Static):
-    session: Optional[ProjectSession] = None
-    selected_index: int = 0
-    stale_ids: set[str] = set()
-    def redraw(self):
-        if not self.session:
-            self.update("No project loaded")
-            return
-        cfgs = self.session.state.config_catalog
-        if not cfgs:
-            self.update("(no configurations)")
-            return
-        if self.selected_index >= len(cfgs):
-            self.selected_index = max(0, len(cfgs)-1)
-        rows = []
-        for idx, c in enumerate(cfgs):
-            marker = '>' if idx == self.selected_index else ' '
-            stale = c.config_id in self.stale_ids
-            set_name = getattr(c, 'set_name', '-') or '-'
-            mode_id = getattr(c, 'mode_id', None) or '-'
-            line = f"{marker} {c.config_id:15} set={set_name} mode={mode_id}"
-            if stale:
-                line = f"[yellow]{line} [STALE][/yellow]"
-            rows.append(line)
-        self.update("Configurations:\n" + "\n".join(rows))
-    def on_key(self, event: events.Key):
-        if event.key == 'up':
-            self.selected_index = max(0, self.selected_index - 1)
-            self.redraw(); event.stop()
-        elif event.key == 'down':
-            if self.session and self.selected_index < len(self.session.state.config_catalog)-1:
-                self.selected_index += 1
-                self.redraw(); event.stop()
-    def selected_config_id(self) -> Optional[str]:
-        if not self.session or not self.session.state.config_catalog:
-            return None
-        if self.selected_index < len(self.session.state.config_catalog):
-            return self.session.state.config_catalog[self.selected_index].config_id
-        return None
-
-class OpsPanel(Static):
-    session: Optional[ProjectSession] = None
-    selected_index: int = 0
-    def redraw(self):
-        if not self.session:
-            self.update("No project loaded")
-            return
-        ops = self.session.state.op_catalog
-        if not ops:
-            self.update("(no operating points)")
-            return
-        if self.selected_index >= len(ops):
-            self.selected_index = max(0, len(ops)-1)
-        rows = []
-        for idx, o in enumerate(ops):
-            marker = '>' if idx == self.selected_index else ' '
-            rows.append(f"{marker} {o.op_id:15} alt={o.altitude_m or '-'} mach={o.mach or '-'} tas={o.tas_mps or '-'}")
-        self.update("Operating Points:\n" + "\n".join(rows))
-    def on_key(self, event: events.Key):
-        if event.key == 'up':
-            self.selected_index = max(0, self.selected_index - 1)
-            self.redraw(); event.stop()
-        elif event.key == 'down':
-            if self.session and self.selected_index < len(self.session.state.op_catalog)-1:
-                self.selected_index += 1
-                self.redraw(); event.stop()
-    def selected_op_id(self) -> Optional[str]:
-        if not self.session or not self.session.state.op_catalog:
-            return None
-        if self.selected_index < len(self.session.state.op_catalog):
-            return self.session.state.op_catalog[self.selected_index].op_id
-        return None
-
-class JobsPanel(Static):
-    session: Optional[ProjectSession] = None
-    def redraw(self):
-        if not self.session:
-            self.update("No project loaded")
-            return
-        jobs = self.session.state.jobs.values()
-        if not jobs:
-            self.update("(no jobs submitted)")
-            return
-        lines = []
-        for j in sorted(jobs, key=lambda x: x.submitted_at):
-            base = f"{j.job_id[:8]} {j.analysis_key:20} {j.status:10} sha={j.ticket_sha or '-'}"
-            if j.status == 'failed':
-                base = f"[red]{base}[/red]"
-            elif j.status == 'running':
-                base = f"[cyan]{base}[/cyan]"
-            elif j.status == 'completed':
-                base = f"[green]{base}[/green]"
-            lines.append(base)
-        self.update("Jobs:\n" + "\n".join(lines))
-
-# --- Input modal for project id ---
-
-class ProjectSelectionView(Static):
-    """Full-screen view for selecting an existing project."""
-
-    def compose(self) -> ComposeResult:  # type: ignore
-        yield Static("Select a project (Enter). Press Esc to cancel. Use the command palette for new projects.", id="project_selector_hint")
-        yield ListView(id="project_selector_list")
-
-    def on_mount(self) -> None:  # pragma: no cover - UI
-        self.refresh_projects()
-
-    def refresh_projects(self) -> None:
-        projects_root = Path("projects")
-        entries: list[ListItem] = []
-        if projects_root.exists():
-            for path in sorted([p for p in projects_root.iterdir() if p.is_dir()]):
-                entries.append(ListItem(Static(path.name)))
-        list_view = self.query_one(ListView)
-        list_view.clear()
-        for item in entries:
-            list_view.append(item)
-        if entries:
-            list_view.index = 0
-        else:
-            list_view.index = None
-
-    def focus_list(self) -> None:
-        try:
-            self.query_one(ListView).focus()
-        except Exception:
-            pass
-
-    def on_list_view_selected(self, event: ListView.Selected) -> None:
-        name = None
-        try:
-            static_child = event.item.query_one(Static)
-            renderable = getattr(static_child, "renderable", None)
-            if renderable is not None:
-                name = getattr(renderable, "plain", None) or str(renderable)
-            else:
-                name = static_child.render() if hasattr(static_child, "render") else None
-        except Exception:
-            pass
-        if not name:
-            name = getattr(event.item, "id", None) or str(event.item)
-        project_id = str(name).strip()
-        if project_id:
-            self.app.post_message(ProjectChosen(project_id))
-        self.app._hide_project_selector()
-        event.stop()
-
-    def on_key(self, event: events.Key) -> None:
-        if event.key == "escape":
-            self.app._hide_project_selector()
-            event.stop()
-
-
-class NewProjectView(Static):
-    """Full-screen view for creating a new project."""
-
-    def compose(self) -> ComposeResult:  # type: ignore
-        yield Static("Create a new project id. Press Enter to confirm or Esc to cancel.", id="new_project_hint")
-        yield Input(placeholder="project_id", id="new_project_input")
-
-    def on_mount(self) -> None:  # pragma: no cover - UI
-        self.reset()
-        self.focus_input()
-
-    def reset(self) -> None:
-        try:
-            self.query_one(Input).value = ""
-        except Exception:
-            pass
-
-    def focus_input(self) -> None:
-        try:
-            self.query_one(Input).focus()
-        except Exception:
-            pass
-
-    def on_input_submitted(self, event: Input.Submitted) -> None:
-        project_id = event.value.strip()
-        if project_id:
-            self.app._hide_new_project()
-            self.app.post_message(ProjectChosen(project_id))
-        else:
-            self.focus_input()
-
-    def on_key(self, event: events.Key) -> None:
-        if event.key == "escape":
-            self.app._hide_new_project()
-            event.stop()
-
-# --- Custom messages ---
-
-from textual.message import Message  # after textual import
-
-class ProjectChosen(Message):
-    def __init__(self, project_id: str) -> None:
-        self.project_id = project_id
-        super().__init__()
-
-
-class ProjectCommandProvider(Provider):
-    """Command palette entries for project operations."""
-
-    def __init__(self, screen: Screen[Any], match_style: Style | None = None) -> None:
-        super().__init__(screen, match_style)
-
-    @property
-    def _entries(self) -> list[tuple[str, Callable[[], None], str]]:
-        return [
-            ("Open project...", self._open_project, "Select and load an existing project."),
-            ("New project...", self._new_project, "Create a new project by id."),
-        ]
-
-    async def search(self, query: str) -> Hits:
-        matcher = self.matcher(query)
-        for title, handler, help_text in self._entries:
-            score = matcher.match(title)
-            if score > 0:
-                yield Hit(score, matcher.highlight(title), handler, help=help_text)
-
-    async def discover(self) -> Hits:
-        for title, handler, help_text in self._entries:
-            yield DiscoveryHit(title, handler, help=help_text)
-
-    def _open_project(self) -> None:
-        self.app.action_open_project()
-
-    def _new_project(self) -> None:
-        self.app.action_new_project()
 
 # --- Main App ---
 
@@ -402,6 +166,7 @@ class StreamlineApp(App):
     CSS_PATH = str(Path(__file__).parent / "tui" / "styles" / "app.tcss")
     BINDINGS = [
         ("q", "quit_app", "Quit"),
+        ("s", "save_project", "Save"),
         ("t", "run_test", "Run Test"),
         ("u", "update_config", "Update"),
     ]
@@ -414,7 +179,7 @@ class StreamlineApp(App):
             "Hide keys and help panel",
         }
         for command in super().get_system_commands(screen):
-            if command.title in suppress:
+            if (command.title in suppress):
                 continue
             yield command
 
@@ -463,26 +228,7 @@ class StreamlineApp(App):
 
     # --- Lifecycle ---
     def on_mount(self) -> None:  # pragma: no cover - UI
-        # Elevate logging verbosity globally
-        root_logger = logging.getLogger()
-        root_logger.setLevel(logging.DEBUG)
-        for h in list(root_logger.handlers):
-            try:
-                h.setLevel(logging.DEBUG)
-            except Exception:
-                pass
-        # Attach / replace EventBusLogHandler for full level capture
-        if not any(isinstance(h, EventBusLogHandler) for h in root_logger.handlers):
-            handler = EventBusLogHandler()
-            handler.setLevel(logging.DEBUG)
-            root_logger.addHandler(handler)
-        else:
-            for h in root_logger.handlers:
-                if isinstance(h, EventBusLogHandler):
-                    h.setLevel(logging.DEBUG)
-        # Provide feedback
-        logging.getLogger(__name__).debug("TUI logging configured for DEBUG level capture")
-        # ...existing code (initial panel/query setup follows)...
+        logging.getLogger(__name__).debug("Streamline TUI mounted")
         self.log_panel = self.query_one("#log_panel", CollapsibleLog)
         self.configs_panel = self.query_one("#configs_panel", ConfigsPanel)
         self.ops_panel = self.query_one("#ops_panel", OpsPanel)
@@ -497,19 +243,13 @@ class StreamlineApp(App):
         self.footer_bar.bindings_changed(self.screen)
         self.log_panel.log("Use Ctrl+P to open a project via the command palette.")
         self.project_header.update_context(project_id=None, active_tab="Configs")
-        # Attach logging handler
-        root_logger = logging.getLogger()
-        if not any(isinstance(h, EventBusLogHandler) for h in root_logger.handlers):
-            handler = EventBusLogHandler()
-            handler.setLevel(logging.INFO)
-            root_logger.addHandler(handler)
         # Setup event bus listener
         bus = get_global_event_bus()
-        if bus is None:
+        if (bus is None):
             from .tui.event_bus import EventBus
             bus = EventBus()
             set_global_event_bus(bus)
-        self._bus_subscription = bus.subscribe_any(self._handle_event)  # store for cleanup
+        self._bus_subscription = bus.subscribe_any(self._handle_event_from_bus)  # store for cleanup
         # Debounce state
         self._refresh_flags = {"configs": False, "ops": False, "jobs": False}
         self._refresh_timer: Timer | None = None
@@ -517,8 +257,11 @@ class StreamlineApp(App):
         self._log_epoch = int(_time())
         self._log_count = 0
         self._log_suppressed = 0
+        # Auto-select configs tab and ensure it's focused
         self.tabs.active = "tab-configs"
         self.switcher.current = "configs_panel"
+        # Focus the configs tab to make it visually highlighted
+        self.call_after_refresh(lambda: self.tabs.focus())
 
     # --- Actions ---
     def action_quit_app(self) -> None:
@@ -527,8 +270,28 @@ class StreamlineApp(App):
         self._show_project_selector()
     def action_new_project(self) -> None:
         self._show_new_project()
+    def action_save_project(self) -> None:
+        """Save the current OpenVSP project file"""
+        if not self.session:
+            self._schedule_log_append("No project loaded to save", level='WARN')
+            return
+        
+        vsp = vsp_session.get_vsp()
+        if vsp is None:
+            self._schedule_log_append("OpenVSP not available", level='ERR')
+            return
+        
+        try:
+            project_id = self.session.state.project_id
+            proj_file = self.session.project_root / f"{project_id}.vsp3"
+            vsp.WriteVSPFile(str(proj_file))
+            self._schedule_log_append(f"Saved project to {proj_file.name}", level='INFO')
+            self._show_notification(f"Saved {project_id}.vsp3", level="success", duration=2.0)
+        except Exception as exc:
+            self._schedule_log_append(f"Failed to save project: {exc}", level='ERR')
+            self._show_notification("Save failed", level="error", duration=3.0)
     def action_refresh(self) -> None:
-        if self.session:
+        if (self.session):
             self.session.refresh_catalogs()
             self._refresh_all()
     def action_focus_tab_configs(self):
@@ -538,30 +301,106 @@ class StreamlineApp(App):
     def action_focus_tab_jobs(self):
         self.tabs.active = "tab-jobs"; self._sync_tab_switch()
     def action_run_test(self):
-        if not self.session:
+        if (not self.session):
             self._schedule_log_append("No session for test analysis", level='WARN'); return
-        from .analysis.test_analyses import NoopTicket
+        session = self.session
+        if (not session.state.config_catalog):
+            self._schedule_log_append("Load a configuration before running test jobs", level='WARN'); return
+        if (not session.state.op_catalog):
+            self._schedule_log_append("Load an operating point before running test jobs", level='WARN'); return
+
+        config_id = self.configs_panel.selected_config_id()
+        if (not config_id):
+            config_id = session.state.config_catalog[0].config_id
+        op_id = self.ops_panel.selected_op_id()
+        if (not op_id):
+            op_id = session.state.op_catalog[0].op_id
+
         try:
-            ticket = NoopTicket(label='quick', duration_s=0.5)
-            self.session.submit('test_noop', ticket)
-            self._schedule_log_append("Submitted test_noop", level='INFO')
+            configuration = get_configuration(session.project_root, config_id)
         except Exception as exc:
-            self._schedule_log_append(f"Test submit failed: {exc}", level='ERR')
+            self._schedule_log_append(f"Failed to load config '{config_id}': {exc}", level='ERR'); return
+        try:
+            operating_point = get_operating_point(session.project_root, op_id)
+        except Exception as exc:
+            self._schedule_log_append(f"Failed to load operating point '{op_id}': {exc}", level='ERR'); return
+
+        # Build stability ticket with configuration defaults
+        stability_kwargs: Dict[str, Any] = {"config_id": config_id}
+        if (configuration.mode):
+            stability_kwargs["mode_id"] = configuration.mode.mode_id
+            stability_kwargs["use_mode_flag"] = configuration.mode.use_mode_flag
+        if (configuration.geom_set_index is not None):
+            stability_kwargs["set_index"] = configuration.geom_set_index
+        if (configuration.geom_set_name):
+            stability_kwargs["set_name"] = configuration.geom_set_name
+        
+        stability_kwargs["alpha_deg"] = 2.0
+        if (operating_point.mach is not None):
+            stability_kwargs["mach"] = operating_point.mach
+        elif (operating_point.tas_mps is not None):
+            stability_kwargs["vinf_mps"] = operating_point.tas_mps
+        
+        # Setup log file redirection
+        log_display: Optional[str] = None
+        project_root = session.project_root
+        try:
+            logs_dir = (project_root / "results" / "_vsp_logs").resolve()
+            logs_dir.mkdir(parents=True, exist_ok=True)
+            log_file = logs_dir / f"vspaero_stability_{op_id}_{int(_time())}.log"
+            log_display = str(log_file)
+            stability_kwargs["redirect_file"] = log_display
+        except Exception:
+            log_display = None
+        
+        stability_ticket = StabilityTicket(**stability_kwargs)
+
+        stability_context = {
+            "config_id": config_id,
+            "operating_point_id": op_id,
+            "alpha_deg": stability_ticket.alpha_deg,
+        }
+        if (operating_point.mach is not None):
+            stability_context["mach"] = operating_point.mach
+        if (operating_point.tas_mps is not None):
+            stability_context["tas_mps"] = operating_point.tas_mps
+        if (log_display):
+            stability_context["redirect_file"] = log_display
+
+        try:
+            stability_job = session.queue_analysis(
+                "vspaero_stability",
+                stability_ticket,
+                context_extras=stability_context,
+                runtime_kwargs={
+                    "configuration": configuration,
+                    "operating_point": operating_point,
+                },
+            )
+        except Exception as exc:
+            self._schedule_log_append(f"Stability submit failed: {exc}", level='ERR'); return
+
+        if (log_display):
+            self._schedule_log_append(f"Stability analysis output redirected to {log_display}", level="INFO")
+        self._schedule_log_append(
+            f"Queued stability analysis for config '{config_id}' at op '{op_id}' (job: {stability_job.job_id[:8]})",
+            level='INFO',
+        )
     def action_diff_config(self):
         cfg_id = self.configs_panel.selected_config_id()
-        if not cfg_id:
+        if (not cfg_id):
             self._schedule_log_append("No configuration selected for diff", level='WARN'); return
         self._schedule_log_append(f"(diff placeholder) Config {cfg_id}", level='INFO')
     def action_update_config(self):
         cfg_id = self.configs_panel.selected_config_id()
-        if not cfg_id:
+        if (not cfg_id):
             self._schedule_log_append("No configuration selected for update", level='WARN'); return
         self._schedule_log_append(f"(update placeholder) Config {cfg_id}", level='INFO')
 
     def _show_project_selector(self) -> None:
-        if not hasattr(self, "primary_switcher"):
+        if (not hasattr(self, "primary_switcher")):
             return
-        if self.primary_switcher.current == "project_selector":
+        if (self.primary_switcher.current == "project_selector"):
             self.project_selector.refresh_projects()
             self.project_selector.focus_list()
             return
@@ -570,7 +409,7 @@ class StreamlineApp(App):
         self.project_selector.focus_list()
 
     def _hide_project_selector(self) -> None:
-        if not hasattr(self, "primary_switcher"):
+        if (not hasattr(self, "primary_switcher")):
             return
         self.primary_switcher.current = "layout_main"
         try:
@@ -579,14 +418,14 @@ class StreamlineApp(App):
             pass
 
     def _show_new_project(self) -> None:
-        if not hasattr(self, "primary_switcher"):
+        if (not hasattr(self, "primary_switcher")):
             return
         self.new_project_view.reset()
         self.primary_switcher.current = "new_project_view"
         self.new_project_view.focus_input()
 
     def _hide_new_project(self) -> None:
-        if not hasattr(self, "primary_switcher"):
+        if (not hasattr(self, "primary_switcher")):
             return
         self.primary_switcher.current = "layout_main"
         try:
@@ -598,7 +437,7 @@ class StreamlineApp(App):
     def _load_project(self, project_id: str) -> None:
         projects_root = Path('projects')
         target = projects_root / project_id
-        if not target.exists():
+        if (not target.exists()):
             self.log_panel.log(f"Project '{project_id}' not found. Creating new project...")
             try:
                 create_new_project(projects_root, project_id)
@@ -618,22 +457,22 @@ class StreamlineApp(App):
                     self.log_panel.log(f"Failed to load config {c.config_id}: {ce}", level='WARN')
             stale_map = revalidate_existing_configs_with_lock(cfg_models, analysis_manager=self.session.manager)
             for cfg_id, errs in stale_map.items():
-                if errs:
+                if (errs):
                     for e in errs:
                         self.log_panel.log(f"CONFIG INVALID {cfg_id}: {e}")
         except Exception as exc:
             self.log_panel.log(f"Validation exception: {exc}")
         # open GUI and assert user should only edit inside Streamline session
         vsp = vsp_session.get_vsp()
-        if vsp is not None:
+        if (vsp is not None):
             try:
-                if not vsp_session.ensure_gui_started(vsp):
+                if (not vsp_session.ensure_gui_started(vsp)):
                     self.log_panel.log("OpenVSP GUI not started (headless binding?)", level="WARN")
             except Exception as exc:
                 self.log_panel.log(f"OpenVSP GUI start warning: {exc}", level="WARN")
             try:
                 proj_file = self.session.project_root / f"{project_id}.vsp3"
-                if proj_file.exists():
+                if (proj_file.exists()):
                     vsp.ReadVSPFile(str(proj_file))
                 else:
                     vsp.WriteVSPFile(str(proj_file))
@@ -655,9 +494,59 @@ class StreamlineApp(App):
         self._update_header()
 
     # --- Event handling ---
+    def _handle_event_from_bus(self, evt):
+        # Check if we're already on the UI thread
+        import threading
+        if threading.current_thread() == threading.main_thread():
+            # Already on UI thread - call directly to avoid deadlock
+            self._handle_event(evt)
+        else:
+            # On background thread - must use call_from_thread
+            try:
+                self.call_from_thread(lambda e=evt: self._handle_event(e))
+            except Exception as exc:
+                # Log the error but don't try to handle event on worker thread
+                import logging
+                logging.getLogger(__name__).error(
+                    "Failed to dispatch event to UI thread",
+                    extra={"hint": str(exc)}
+                )
+
     def _handle_event(self, evt):  # evt is generic from bus
         # Handle typed events first
-        if isinstance(
+        if (isinstance(evt, AnalysisJobQueued)):
+            self._mark_refresh('jobs')
+            if (self.session and evt.session_id and evt.session_id != getattr(self.session, "session_id", None)):
+                return
+            message = f"Queued {evt.analysis_key} ({evt.job_id[:8]})"
+            self._schedule_log_append(message, level="INFO")
+            # DO NOT call sync here - it can block on call_from_thread
+            # The job will be synced when it actually starts/completes
+            return
+
+        if (isinstance(evt, AnalysisJobStatusChanged)):
+            self._mark_refresh('jobs')
+            if (self.session and evt.session_id and evt.session_id != getattr(self.session, "session_id", None)):
+                return
+            status = (evt.status or "unknown").lower()
+            message = f"{status.title()} {evt.analysis_key} ({evt.job_id[:8]})"
+            level = "INFO"
+            if (status == "cached"):
+                cache_sha = evt.ticket_sha[:10] + "..." if (evt.ticket_sha and len(evt.ticket_sha) > 10) else evt.ticket_sha
+                suffix = f" (cache sha={cache_sha})" if (cache_sha) else ""
+                message = f"Reused cached {evt.analysis_key}{suffix}"
+            if (status == "failed"):
+                level = "ERR"
+                if (evt.error):
+                    message = f"FAILED {evt.analysis_key} ({evt.job_id[:8]}): {evt.error}"
+            elif (status == "running"):
+                message = f"Running {evt.analysis_key} ({evt.job_id[:8]})"
+            elif (status == "completed"):
+                message = f"Completed {evt.analysis_key} ({evt.job_id[:8]})"
+            self._schedule_log_append(message, level=level)
+            return
+
+        if (isinstance(
             evt,
             (
                 JobSubmittedEvent, 
@@ -666,47 +555,52 @@ class StreamlineApp(App):
                 JobFailedEvent,
                 ReceiptAddedEvent,
             ),
-        ):
+        )):
             self._mark_refresh('jobs')
-            if isinstance(evt, JobSubmittedEvent):
+            # Only sync for actual state changes (started/completed/failed), NOT for submitted
+            if self.session and isinstance(evt, (JobStartedEvent, JobCompletedEvent, JobFailedEvent)):
+                try:
+                    self.session.sync_job_states()
+                except Exception:
+                    pass
+            if (isinstance(evt, JobSubmittedEvent)):
                 self._show_notification(
                     f"Queued {evt.analysis_key} ({evt.job_id[:8]})",
                     level="info",
                     duration=3.0,
                 )
-            if isinstance(evt, JobStartedEvent):
+            if (isinstance(evt, JobStartedEvent)):
                 self._show_notification(
                     f"Started {evt.analysis_key} ({evt.job_id[:8]})",
                     level="info",
                     duration=3.0,
                 )
-            if isinstance(evt, JobFailedEvent):
-                self._schedule_log_append(f"JOB FAILED {evt.job_id}: {evt.error}", level='ERR')
+            if (isinstance(evt, JobFailedEvent)):
                 self._show_notification(
                     f"Job {evt.analysis_key} failed",
                     level="error",
                     duration=6.0,
                 )
-            if isinstance(evt, JobCompletedEvent):
+            if (isinstance(evt, JobCompletedEvent)):
                 self._show_notification(
                     f"Completed {evt.analysis_key}",
                     level="success",
                     duration=4.0,
                 )
-            if isinstance(evt, ReceiptAddedEvent) and evt.analysis_key == 'test_noop':
+            if (isinstance(evt, ReceiptAddedEvent) and evt.analysis_key == 'test_noop'):
                 receipt = evt.receipt_summary or {}
                 dur = receipt.get('duration_s') or receipt.get('duration') or None
-                if isinstance(dur, (int, float)):
+                if (isinstance(dur, (int, float))):
                     self.last_test_duration = float(dur)
             return
 
-        if isinstance(evt, WorkerFailed):
-            detail = f": {evt.details}" if evt.details else ""
+        if (isinstance(evt, WorkerFailed)):
+            detail = f": {evt.details}" if (evt.details) else ""
             self._schedule_log_append(f"Worker failure{detail}", level="ERR")
             self._show_notification("Analysis worker encountered an error", level="error", duration=6.0)
             return
 
-        if isinstance(
+        if (isinstance(
             evt,
             (
                 CatalogChangedEvent,
@@ -714,18 +608,24 @@ class StreamlineApp(App):
                 ConfigurationUpdatedEvent,
                 ConfigurationRemovedEvent,
             ),
-        ):
+        )):
             self._mark_refresh('configs')
             return
 
-        if isinstance(evt, ConfigurationStaleEvent):
-            if evt.config_id:
+        if (isinstance(evt, ConfigurationStaleEvent)):
+            if (evt.config_id):
                 self.configs_panel.stale_ids.add(evt.config_id)
             self._mark_refresh('configs')
             return
 
         if isinstance(evt, LogMessageEvent):
-            self._schedule_log_append(evt.message, level=evt.level)
+            # Use the dedicated event handler method
+            try:
+                self.call_from_thread(lambda: self.log_panel.log_from_event(evt))
+            except Exception:
+                # Fallback to direct call if threading fails
+                self.log_panel.log_from_event(evt)
+            return
         # Future: op catalog change events -> self._mark_refresh('ops')
 
     def _show_notification(self, message: str, *, level: str = "info", duration: float = 4.0) -> None:
@@ -744,9 +644,9 @@ class StreamlineApp(App):
 
     def _schedule_log_append(self, text: str, level: str | None = None):
         now_epoch = int(_time())
-        if now_epoch != self._log_epoch:
+        if (now_epoch != self._log_epoch):
             # new second: flush suppression summary if any
-            if self._log_suppressed:
+            if (self._log_suppressed):
                 summary = f"(suppressed {self._log_suppressed} log lines)"
                 try:
                     self.call_from_thread(lambda: self.log_panel.log(summary))
@@ -755,7 +655,7 @@ class StreamlineApp(App):
             self._log_epoch = now_epoch
             self._log_count = 0
             self._log_suppressed = 0
-        if self._log_count > 120:  # raise per-second threshold for verbose DEBUG output
+        if (self._log_count > 120):  # raise per-second threshold for verbose DEBUG output
             self._log_suppressed += 1
             return
         self._log_count += 1
@@ -768,35 +668,35 @@ class StreamlineApp(App):
 
     def _mark_refresh(self, key: str):
         self._refresh_flags[key] = True
-        if not self._refresh_timer:
+        if (not self._refresh_timer):
             self._refresh_timer = self.set_timer(0.1, self._apply_refresh_flags)  # removed repeat kw
     def _apply_refresh_flags(self):
-        if self._refresh_flags.get('configs'): self.configs_panel.redraw()
-        if self._refresh_flags.get('ops'): self.ops_panel.redraw()
-        if self._refresh_flags.get('jobs'): self.jobs_panel.redraw()
+        if (self._refresh_flags.get('configs')): self.configs_panel.redraw()
+        if (self._refresh_flags.get('ops')): self.ops_panel.redraw()
+        if (self._refresh_flags.get('jobs')): self.jobs_panel.redraw()
         self._update_header()
         for k in self._refresh_flags: self._refresh_flags[k] = False
         self._refresh_timer = None
 
     def _update_header(self) -> None:
         header = getattr(self, "project_header", None)
-        if header is None:
+        if (header is None):
             return
         project_id = None
         total_jobs = None
         running_jobs = 0
-        if self.session:
+        if (self.session):
             project_id = self.session.state.project_id
             jobs = list(self.session.state.jobs.values())
             total_jobs = len(jobs)
             running_jobs = sum(
                 1
                 for job in jobs
-                if job.status not in {"completed", "cached", "failed"}
+                if (job.status not in {"completed", "cached", "failed"})
             )
         active_label = "Configs"
         tabs = getattr(self, "tabs", None)
-        if tabs is not None:
+        if (tabs is not None):
             try:
                 active_label = tabs.active.replace("tab-", "").title()
             except Exception:
@@ -804,7 +704,7 @@ class StreamlineApp(App):
         header.update_context(
             project_id=project_id,
             active_tab=active_label,
-            running_jobs=running_jobs if total_jobs is not None else None,
+            running_jobs=running_jobs if (total_jobs is not None) else None,
             total_jobs=total_jobs,
         )
 
@@ -814,12 +714,12 @@ class StreamlineApp(App):
 
     def on_exit(self) -> None:  # graceful shutdown
         try:
-            if self.session:
+            if (self.session):
                 self.session.stop()
         except Exception:
             pass
         try:
-            if getattr(self, '_bus_subscription', None):
+            if (getattr(self, '_bus_subscription', None)):
                 self._bus_subscription.cancel()
         except Exception:
             pass
@@ -845,11 +745,51 @@ class StreamlineApp(App):
 
 # Entrypoint helper
 
-def run_app():  # pragma: no cover - manual execution path
+def run_app(argv: Optional[list[str]] = None) -> None:  # pragma: no cover - manual execution path
+    args = list(argv if (argv is not None) else sys.argv[1:])
+    debug = False
+    log_level: Optional[str] = None
+    log_file: Optional[str] = None
+    passthrough: list[str] = []
+
+    idx = 0
+    while (idx < len(args)):
+        arg = args[idx]
+        if (arg in ("-debug", "--debug")):
+            debug = True
+        elif (arg.startswith("--log-level=")):
+            log_level = arg.split("=", 1)[1]
+        elif (arg == "--log-level"):
+            if (idx + 1 >= len(args)):
+                raise SystemExit("--log-level requires a value")
+            idx += 1
+            log_level = args[idx]
+        elif (arg.startswith("--log-file=")):
+            log_file = arg.split("=", 1)[1]
+        elif (arg == "--log-file"):
+            if (idx + 1 >= len(args)):
+                raise SystemExit("--log-file requires a path")
+            idx += 1
+            log_file = args[idx]
+        else:
+            passthrough.append(arg)
+        idx += 1
+
+    level = _configure_logging(debug, log_level, log_file)
+    logging.getLogger(__name__).debug(
+        "Logging configured for Streamline TUI",
+        extra={"context": {"level": logging.getLevelName(level), "log_file": log_file or os.environ.get("STREAMLINE_LOG_FILE")}},
+    )
+    if (passthrough):
+        logging.getLogger(__name__).warning(
+            "Ignoring unrecognized TUI arguments",
+            extra={"context": {"args": passthrough}},
+        )
+
     app = StreamlineApp()
     app.run()
 
-if __name__ == "__main__":  # pragma: no cover
+if (__name__ == "__main__"):  # pragma: no cover
     run_app()
 
 

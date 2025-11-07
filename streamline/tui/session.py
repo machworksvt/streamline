@@ -578,8 +578,12 @@ class ProjectSession:
             ticket_payload=_ticket_payload(ticket),
             context=dict(context_extras or {}),
         )
+        
+        # Add job to state with lock, but release before publishing events
         with self._lock:
             self.state.jobs[job_id] = job
+        
+        # Publish event AFTER releasing lock to avoid blocking if handler uses call_from_thread
         self.event_bus.publish(
             AnalysisJobQueued(
                 session_id=self.session_id,
@@ -590,6 +594,7 @@ class ProjectSession:
                 submitted_at=job.submitted_at,
             )
         )
+        
         self._logger.info(
             "Queued analysis job",
             context={"job_id": job_id, "analysis": analysis_key},
@@ -598,14 +603,37 @@ class ProjectSession:
 
     def sync_job_states(self) -> None:
         """Poll the AnalysisManager for job updates and emit events."""
+        
+        # Debug: Log which thread is calling this
+        import threading
+        current_thread = threading.current_thread().name
+        self._logger.debug(
+            f"sync_job_states called from thread: {current_thread}",
+            context={"thread_name": current_thread, "thread_id": threading.get_ident()}
+        )
 
+        # Get snapshots of both session jobs and manager job states in one go
         with self._lock:
             jobs_snapshot = list(self.state.jobs.values())
+        
+        # Batch fetch all job states from manager to minimize lock acquisitions
+        manager_states = {}
         for job in jobs_snapshot:
             try:
-                state = self.manager.job_state(job.job_id)
+                manager_states[job.job_id] = self.manager.job_state(job.job_id)
             except KeyError:
                 continue
+        
+        # Now process updates without holding any locks
+        events_to_publish: List[AnalysisJobStatusChanged] = []
+        needs_cache_refresh = False
+        needs_results_refresh = False
+        
+        for job in jobs_snapshot:
+            state = manager_states.get(job.job_id)
+            if state is None:
+                continue
+                
             status_changed = state.status != job.status
             ticket_sha_changed = state.ticket_sha != job.ticket_sha
             details_changed = status_changed or ticket_sha_changed
@@ -615,6 +643,8 @@ class ProjectSession:
                 details_changed = True
             if not details_changed:
                 continue
+            
+            # Update job state while holding lock (but briefly)
             with self._lock:
                 job.status = state.status
                 job.ticket_sha = state.ticket_sha
@@ -624,8 +654,10 @@ class ProjectSession:
                 job.error = str(state.error) if state.error else None
                 if job.status in {"completed", "cached", "failed"}:
                     job.finished = True
+            
+            # Prepare event to publish AFTER releasing lock
             receipt_summary = _receipt_summary(state.receipt)
-            self.event_bus.publish(
+            events_to_publish.append(
                 AnalysisJobStatusChanged(
                     session_id=self.session_id,
                     job_id=job.job_id,
@@ -638,15 +670,27 @@ class ProjectSession:
                     receipt_summary=receipt_summary,
                 )
             )
+            
             if job.status in {"completed", "cached"}:
-                self.refresh_cache()
-                self.refresh_results()
+                needs_cache_refresh = True
+                needs_results_refresh = True
+            
             if job.status == "failed" and job.error:
                 self._logger.warning(
                     "Analysis job failed",
                     context={"job_id": job.job_id, "analysis": job.analysis_key},
                     hint=job.error,
                 )
+        
+        # Publish all events AFTER releasing all locks
+        for event in events_to_publish:
+            self.event_bus.publish(event)
+        
+        # Refresh AFTER releasing locks and publishing events
+        if needs_cache_refresh:
+            self.refresh_cache()
+        if needs_results_refresh:
+            self.refresh_results()
 
     # ------------------------------------------------------------------
     # Introspection helpers

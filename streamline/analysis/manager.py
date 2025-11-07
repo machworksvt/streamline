@@ -23,7 +23,6 @@ from ..io.results_index import (
 )
 
 from .contracts import Receipt, Ticket
-from ..vsp.contracts.compute_geometry import ComputeGeometryReceipt
 from ..vsp.contracts.comp_geom import CompGeomReceipt
 from ..vsp.contracts.parasite_drag import ParasiteDragReceipt
 from ..vsp.contracts.stability import StabilityReceipt
@@ -276,10 +275,6 @@ class AnalysisManager:
             },
         )
     def register_builtin_analyses(self) -> None:
-        from ..vsp.analyses.compute_geometry import (
-            run_compute_geometry,
-            _materialize_compute_geometry,
-        )
         from ..vsp.analyses.comp_geom import (
             run_comp_geom,
             _materialize_comp_geom,
@@ -293,14 +288,6 @@ class AnalysisManager:
             _materialize_stability,
         )
 
-        self.register_analysis(
-            "vspaero_compute_geometry",
-            run_compute_geometry,
-            materializer=_materialize_compute_geometry,
-            default_dependency_keys={"vsp_model", "configuration"},
-            receipt_model=ComputeGeometryReceipt,
-            description="Pre-compute VSPAERO geometry inputs",
-        )
         self.register_analysis(
             "comp_geom",
             run_comp_geom,
@@ -340,56 +327,64 @@ class AnalysisManager:
         wait_for: Optional[Iterable[str]] = None,
         priority: int = 0,
     ) -> str:
+        # Prepare event data before acquiring lock
+        job_id = uuid.uuid4().hex
+        base_context = {"analysis": analysis_key}
+        if context_extras:
+            base_context.update(context_extras)
+        
+        job = AnalysisJob(
+            job_id=job_id,
+            analysis_key=analysis_key,
+            ticket=ticket,
+            context_extras=base_context,
+            runtime_kwargs=dict(runtime_kwargs or {}),
+            dependency_keys=set(dependency_keys or set()),
+            wait_for=set(wait_for or set()),
+            priority=int(priority),
+        )
+        
+        # Only hold lock for the minimum time needed
         with self._lock:
             if analysis_key not in self._registry:
                 raise KeyError(f"Analysis '{analysis_key}' is not registered")
-            job_id = uuid.uuid4().hex
-            base_context = {"analysis": analysis_key}
-            if context_extras:
-                base_context.update(context_extras)
-            job = AnalysisJob(
-                job_id=job_id,
-                analysis_key=analysis_key,
-                ticket=ticket,
-                context_extras=base_context,
-                runtime_kwargs=dict(runtime_kwargs or {}),
-                dependency_keys=set(dependency_keys or set()),
-                wait_for=set(wait_for or set()),
-                priority=int(priority),
-            )
             self._jobs[job_id] = JobState(job=job)
             self._queue.put(job_id)
-            self._logger.info(
-                "Queued analysis job",
-                context={
-                    "job_id": job_id,
-                    "analysis": analysis_key,
-                    "priority": priority,
-                    "wait_for": list(job.wait_for),
-                },
-            )
-            bus = _get_event_bus()
-            if bus and JobSubmittedEvent is not None:
-                try:
-                    ticket_payload = (
-                        ticket.model_dump(mode="json", exclude_none=True)
-                        if hasattr(ticket, "model_dump")
-                        else getattr(ticket, "__dict__", {})
+        
+        # Log and publish events AFTER releasing lock
+        self._logger.info(
+            "Queued analysis job",
+            context={
+                "job_id": job_id,
+                "analysis": analysis_key,
+                "priority": priority,
+                "wait_for": list(job.wait_for),
+            },
+        )
+        
+        bus = _get_event_bus()
+        if bus and JobSubmittedEvent is not None:
+            try:
+                ticket_payload = (
+                    ticket.model_dump(mode="json", exclude_none=True)
+                    if hasattr(ticket, "model_dump")
+                    else getattr(ticket, "__dict__", {})
+                )
+                bus.publish(
+                    JobSubmittedEvent(
+                        job_id=job_id,
+                        analysis_key=analysis_key,
+                        ticket_payload=ticket_payload,
+                        context=context_extras or {},
+                        wait_for=tuple(job.wait_for),
+                        priority=int(priority),
+                        submitted_at=job.submitted_at,
                     )
-                    bus.publish(
-                        JobSubmittedEvent(
-                            job_id=job_id,
-                            analysis_key=analysis_key,
-                            ticket_payload=ticket_payload,
-                            context=context_extras or {},
-                            wait_for=tuple(job.wait_for),
-                            priority=int(priority),
-                            submitted_at=job.submitted_at,
-                        )
-                    )
-                except Exception:
-                    pass
-            return job_id
+                )
+            except Exception:
+                pass
+        
+        return job_id
 
     def has_pending(self) -> bool:
         return not self._queue.empty()
@@ -656,9 +651,13 @@ class AnalysisManager:
         return summaries
 
     def cache_entry(self, analysis_key: str, ticket_sha: str) -> Optional[AnalysisCacheEntry]:
+        # Get entry with lock, but release before validation (which does I/O)
         with self._lock:
             entry = self._cache.get(analysis_key, {}).get(ticket_sha)
+        
+        # Do validation OUTSIDE the lock to avoid blocking other threads during I/O
         if entry and not self._receipt_is_valid(entry):
+            # Re-acquire lock to remove invalid entry
             with self._lock:
                 bucket = self._cache.get(analysis_key, {})
                 bucket.pop(ticket_sha, None)
@@ -982,11 +981,26 @@ class AnalysisManager:
         save_cache_records(self._results_root, records)
     @contextmanager
     def vsp_guard(self):
-        self._vsp_lock.acquire()
+        # Lock the GUI to prevent user interaction during analysis
+        from ..vsp import session as vsp_session
+        gui_was_locked = False
         try:
-            yield
-        finally:
-            self._vsp_lock.release()
+            if self._vsp is not None:
+                vsp_session.lock_gui(self._vsp)
+                gui_was_locked = True
+        except Exception as exc:
+            self._logger.debug("Failed to lock GUI", hint=str(exc))
+        
+        with self._vsp_lock:
+            try:
+                yield
+            finally:
+                # Always unlock GUI even if analysis fails
+                if gui_was_locked:
+                    try:
+                        vsp_session.unlock_gui(self._vsp)
+                    except Exception as exc:
+                        self._logger.debug("Failed to unlock GUI", hint=str(exc))
 
     def _receipt_summary(self, receipt: Receipt) -> Dict[str, Any]:
         summary: Dict[str, Any] = {}
@@ -1016,4 +1030,3 @@ class AnalysisManager:
         """
         # Currently no background threads spawned by AnalysisManager; placeholder for future.
         self._logger.debug("AnalysisManager shutdown invoked")
-

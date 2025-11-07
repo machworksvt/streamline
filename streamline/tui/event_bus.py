@@ -3,7 +3,7 @@ from __future__ import annotations
 import threading
 import uuid
 from dataclasses import dataclass
-from typing import Callable, Dict, Iterable, Optional, Type, TypeVar
+from typing import Callable, Dict, Iterable, Optional, Type, TypeVar, List
 
 from .events import Event
 
@@ -49,11 +49,15 @@ class EventBus:
 
         listeners: Dict[str, Callable[[Event], None]] = {}
         event_type = type(event)
+        any_callbacks: List[Callable[[Event], None]] = []
+        
         with self._lock:
             for registered_type, callbacks in self._subscribers.items():
                 if issubclass(event_type, registered_type):
                     listeners.update(callbacks)
             any_callbacks = list(self._any_subscribers.values())
+        
+        # Execute callbacks OUTSIDE the lock to prevent deadlock
         for callback in listeners.values():
             try:
                 callback(event)

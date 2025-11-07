@@ -132,6 +132,11 @@ class LogMessageEvent(ManagerEvent):
     level: str = ""
     name: str = ""
     message: str = ""
+    timestamp: float = field(default_factory=time.time)
+    context: Optional[Dict[str, Any]] = None
+    hint: Optional[str] = None
+    error_code: Optional[str] = None
+    exc_info: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
