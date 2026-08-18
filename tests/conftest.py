@@ -1,37 +1,26 @@
+"""Test plumbing.
+
+There is no stub OpenVSP and there will not be one (Master Plan §8.9 #3): a suite that goes green
+without the solver is a suite that measures nothing about the solver. Tests that need the bindings
+take the `session` fixture; if the bindings are missing the fixture FAILS with the reason, it does
+not skip. Set STREAMLINE_ALLOW_MISSING_VSP=1 to turn those failures into skips on a machine that is
+deliberately not the flake — never in CI.
+"""
+
 from __future__ import annotations
 
-import os, sys
+import os
+
 import pytest
-from pathlib import Path
-from streamline.vsp import import_vsp
-from streamline.core.errors import VSPSessionError
 
-ROOT = Path(__file__).resolve().parent.parent
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
-if os.environ.get("STREAMLINE_DEBUG_VSP"):
-    print("DEBUG VSP sys.executable:", sys.executable)
-    print("DEBUG VSP sys.path head:", sys.path[:8])
+from streamline.vsp import session as session_mod
 
 
 @pytest.fixture(scope="session")
-def openvsp_runtime():
-    """Return a validated OpenVSP module via canonical importer.
-
-    Falls back to skip (or fail if STREAMLINE_REQUIRE_REAL_VSP is truthy)
-    when the runtime is unavailable or incomplete.
-    """
-    truthy = {"1", "true", "yes", "on"}
-    require_real = os.getenv("STREAMLINE_REQUIRE_REAL_VSP", "").strip().lower() in truthy
+def session():
     try:
-        mod = import_vsp()  # session logic handles symbol promotion/validation
-        return mod
-    except VSPSessionError as e:
-        if require_real:
-            raise RuntimeError(f"Failed to import OpenVSP runtime: {e.message}") from e
-        pytest.skip(f"OpenVSP runtime unavailable: {e.message}")
-    except Exception as e:  # unexpected import failure
-        if require_real:
-            raise RuntimeError(f"Unexpected OpenVSP import error: {e}") from e
-        pytest.skip(f"OpenVSP import error: {e}")
+        return session_mod.require_openvsp()
+    except session_mod.OpenVSPMissing as e:
+        if os.environ.get("STREAMLINE_ALLOW_MISSING_VSP") == "1":
+            pytest.skip(f"OpenVSP bindings missing and STREAMLINE_ALLOW_MISSING_VSP=1: {e}")
+        pytest.fail(f"OpenVSP bindings are required (run inside `nix develop`): {e}")

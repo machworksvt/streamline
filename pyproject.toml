@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "streamline"
+version = "2.0.0a0"
+description = "AeroDB producer for the Icarus chain — OpenVSP/VSPAERO campaigns, contract, release"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { file = "LICENSE" }
+# Names only. Versions are pinned by flake.lock, not here — the dev shell IS the environment
+# (Master Plan §8.9 #1, #4). `openvsp` is the pinned OpenVSP's own module and is not on PyPI.
+dependencies = [
+  "numpy",
+  "matplotlib",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+streamline = "streamline.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+testpaths = ["tests", "contract/aerodb_contract/tests"]
+markers = [
+  "vsp: needs the real OpenVSP bindings (the CI default; never skipped for green-ness)",
+  "slow: a real VSPAERO solve",
+]

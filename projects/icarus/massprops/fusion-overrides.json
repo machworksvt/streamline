@@ -1,0 +1,100 @@
+{
+  "_": "Declared corrections applied by `streamline massprops from-fusion` on top of the Fusion body export before it becomes ledger.json. Every entry has a reason; nothing here is measured. Body selectors: `path_glob` (fnmatch on the occurrence path) + `body` (exact body name); a rule matches when both match.",
+  "frame": {
+    "name": "fusion_root",
+    "to_frd": "diag(-1,1,-1)",
+    "note": "Fusion root frame = OpenVSP model frame (X aft, Y right, Z up, common origin; nose tip at X = -822 mm, Abu Razbir 2026-08-17). FRD = (-X, Y, -Z). Bodies are read in the root context."
+  },
+  "fuel": {
+    "bodies": [
+      {
+        "path_glob": "/! Main tank rework:1",
+        "body": "Body48"
+      },
+      {
+        "path_glob": "/! Main tank rework:1",
+        "body": "Body49"
+      }
+    ],
+    "density_kg_m3": 800.0,
+    "reason": "The two 'Fuel tank (full)' solids are the tank interior (3.32 L main + 0.59 L hopper = 3.91 L) modelled at water density (997.5). Excluded from the DRY ledger and reported as the fuel block at kerosene density 800 kg/m^3 (engine deck fuel.density_kg_m3); their CG becomes fuel.cg_m for the consumer's fuel state."
+  },
+  "density_overrides": [
+    {
+      "path_glob": "/sigh*/Servo Adapter*/A6320 Servo*",
+      "body": "A6320 Servo",
+      "density_kg_m3": 3217.71,
+      "reason": "The four V-tail A6320 servos carry Fusion's default 'Steel' (7850 -> 248 g each). The identical A6320 servo bodies in both wing assemblies carry the calibrated 'Servo' material (3217.71 -> 101.5 g). Same part, same volume: use the calibrated density."
+    },
+    {
+      "path_glob": "/sigh*",
+      "body": "Rib 1",
+      "density_kg_m3": 448.495,
+      "reason": "Tail structure. The seven bodies (Rib 1-3, Base Rib, Spar 1-3) in each V-tail/elevator group carry Fusion's default 'Steel' (0.588 kg per side). Geometry check (2026-08-18, face census through the API): every one is a 6.00 mm plate (ribs chordwise, 'spars' swept spanwise webs) with no cylindrical faces — the identical construction to the wing's ribs and spar webs, which carry the calibrated 'Foam core panel' 448.5 kg/m^3 (6 mm CF-skinned foam sandwich). User 2026-08-18: the tail structure is the same as the wing's (CF plate cut). If the plates are solid CF (1550) instead, add ~83 g per side at x ~ 660 mm."
+    },
+    {
+      "path_glob": "/sigh*",
+      "body": "Rib 2",
+      "density_kg_m3": 448.495,
+      "reason": "see 'Rib 1' (same rule set)"
+    },
+    {
+      "path_glob": "/sigh*",
+      "body": "Rib 3",
+      "density_kg_m3": 448.495,
+      "reason": "see 'Rib 1' (same rule set)"
+    },
+    {
+      "path_glob": "/sigh*",
+      "body": "Base Rib",
+      "density_kg_m3": 448.495,
+      "reason": "see 'Rib 1' (same rule set)"
+    },
+    {
+      "path_glob": "/sigh*",
+      "body": "Spar 1",
+      "density_kg_m3": 448.495,
+      "reason": "see 'Rib 1' (same rule set)"
+    },
+    {
+      "path_glob": "/sigh*",
+      "body": "Spar 2",
+      "density_kg_m3": 448.495,
+      "reason": "see 'Rib 1' (same rule set)"
+    },
+    {
+      "path_glob": "/sigh*",
+      "body": "Spar 3",
+      "density_kg_m3": 448.495,
+      "reason": "see 'Rib 1' (same rule set)"
+    }
+  ],
+  "extra_components": [
+    {
+      "name": "main_spar_right_half",
+      "mass_kg": 0.12567,
+      "cg_root_mm": [
+        10.9,
+        320.0,
+        5.5
+      ],
+      "reason": "Root-level 'Body23' (Main Spar, CF 1550, 0.126 kg) exists only on the left (y = -320 mm); the aircraft's carry-through is symmetric. Mirrored copy declared so the ledger's y-CG is not biased by a one-sided model body."
+    }
+  ],
+  "balance": {
+    "name": "forward_equipment_and_ballast",
+    "cg_frd_m": [
+      0.7,
+      0.0,
+      -0.05
+    ],
+    "target_dry_cg_x_frd_m": -0.005,
+    "reason": "DECLARED, sized by the generator: mass at the nose bay (x = +0.70 m FRD, inside the nose cone) needed to put the DRY CG at x_FRD = -0.005 m (5 mm aft of the datum, ~120 mm behind the wing root LE; SM ~ 12 % against the fuselage-corrected NP -0.035, ~17 % against the VLM NP -0.047). Stands in for equipment not in the CAD (ECU, fuel pump, flight computer, harness) plus whatever ballast remains. Zero if the CG is already forward of the target."
+  },
+  "open_questions": [
+    "Tail plates taken as the wing's 6 mm foam-core panel (448.5); if solid CF plate (1550) the two tails gain 0.17 kg at x ~660 mm (dry CG +5 mm aft).",
+    "CONFIRMED by the user 2026-08-18: tankage 3.91 L (3.13 kg kerosene) is right, and all major heavy components are in the model — nothing large is missing from the CAD; the forward-equipment/ballast entry stays sized to zero.",
+    "'PA 12 - Nylon - PA 603-CF' carries density 997.484 (identical to the water-fuel material; real ~1050): tank + hopper walls +45 g. Not overridden (below the noise).",
+    "Zeee 3S 8000 mAh batteries modelled at 413 g each; catalogue ~500-520 g. Not overridden."
+  ]
+}

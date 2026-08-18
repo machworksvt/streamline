@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aerodb-contract"
+version = "0.1.0"
+description = "The AeroDB contract between streamline and icarus-dynamics: schema, conventions, lint, sign fixtures, loaders"
+requires-python = ">=3.12"
+# numpy and nothing else. The consumer's shell is stdlib + numpy (+ casadi); this must stay importable there.
+dependencies = ["numpy"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["aerodb_contract*"]
+
+[tool.setuptools.package-data]
+aerodb_contract = ["conventions.md", "spec.md"]

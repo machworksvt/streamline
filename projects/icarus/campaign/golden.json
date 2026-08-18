@@ -1,0 +1,51 @@
+{
+  "_": "The coarse PR-tier campaign (§8.9 #2): 9 stab points + q/r rate runs + parasite at one airspeed, clean configuration. Its reference outputs live in golden/reference/ once pinned.",
+  "aircraft": "icarus",
+  "geometry_rev": "B",
+  "geometry_file": "icarus-B.vsp3",
+  "geometry_sha256": "0c0118548e695cd2eced76f4606b0ef4d8e51607e736f9a94a4c597f35ef03d5",
+  "grid": {
+    "alpha_deg": [-4.0, 2.0, 8.0],
+    "beta_deg": [-5.0, 0.0, 5.0],
+    "airspeed_m_s": [30.0],
+    "flap_deg": [0.0]
+  },
+  "altitude_m": 533.4,
+  "cref_m": 0.2435,
+  "moment_reference_point_m": [0.0, 0.0, 0.0],
+  "moment_reference_is_datum": true,
+  "reference_wing": "MainWing",
+  "vlm_set": "streamline_vlm",
+  "parasite_set": "streamline_parasite",
+  "surface_groups": {
+    "aileron_left": "aileron_left",
+    "aileron_right": "aileron_right",
+    "flap_left": "flap_left",
+    "flap_right": "flap_right",
+    "stabilator": "stabilator",
+    "ruddervator_left": "ruddervator_left",
+    "ruddervator_right": "ruddervator_right"
+  },
+  "flap_group": "flap_detent",
+  "solver": {"ncpu": 4, "wake_iters": 3, "num_wake_nodes": 16},
+  "completeness_claims": {"engine_geometry": true},
+  "analytic_rates": {
+    "_": "Tail volumes measured on icarus-B (AUDIT-A.md): arms = |bbox mid x| from the datum moment reference; V-tail (cant 62.5 deg) split cos^2/sin^2 into pitch/yaw projections of its 0.100 m2; a from Helmbold 2*pi*AR/(2+sqrt(AR^2+4)); eta 0.9; deps/dalpha = 2*CL_alpha/(pi*AR_wing) = 2*4.03/(pi*8.065) = 0.32. Predicts Cm_q+adot ~ -8.0, Cn_r ~ -0.063.",
+    "horizontal_tails": [
+      {"name": "stabilator", "S_m2": 0.0639, "arm_m": 0.647, "a_per_rad": 3.52, "eta": 0.9},
+      {"name": "vtail_pitch_projection", "S_m2": 0.0213, "arm_m": 0.659, "a_per_rad": 3.36, "eta": 0.9}
+    ],
+    "vertical_tails": [
+      {"name": "vtail_yaw_projection", "S_m2": 0.0787, "arm_m": 0.659, "a_per_rad": 3.36, "eta": 0.9}
+    ],
+    "depsilon_dalpha": 0.32
+  },
+  "cl_max_estimate": [1.2],
+  "taper_ratio": 0.278,
+  "sign_waivers": [],
+  "validity": {
+    "alpha_deg": [-6.0, 12.0],
+    "delta_deg_max": 25.0,
+    "notes": "coarse golden grid; physics quality bounded by wake_iters=3 — the release grid uses canonical.json"
+  }
+}

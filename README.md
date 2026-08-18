@@ -1,74 +1,56 @@
-# Streamline Environment Setup
+# streamline
 
-Streamline can be developed on Windows, macOS, or Linux using a standard Python 3.11 toolchain. The only vendor dependency is [OpenVSP](https://openvsp.org); you install it manually using the bindings that ship with the official download.
+The AeroDB producer for the Icarus chain. It turns a versioned OpenVSP geometry into
+contract-validated aerodynamic data (`aerodb.json`), mass properties (`massprops.json`) and a static
+engine deck (`engine_deck.json`), plus the report a reviewer reads — and releases them, CI-only, to
+`icarus-aerodb`, which `icarus-dynamics` pins by hash. Master Plan §8.
 
-## Environment setup at a glance
+```
+projects/icarus/geometry/icarus-A.vsp3 ──┐
+projects/icarus/campaign/canonical.json ─┼─▶ streamline campaign run ─▶ raw rows ─▶ assemble ─▶ aerodb.json + siblings
+projects/icarus/massprops/ledger.json ───┤                                             │  lint · signs · contract
+projects/icarus/engine/bench_static.csv ─┘                                             ▼
+                                                                                report.pdf · MANIFEST.json ─▶ icarus-aerodb/<id>/
+```
 
-1. **Install Python packages** – `pip install -r requirements.txt` (or use `environment.yml` with Conda).
-2. **Provision OpenVSP** – download the official OpenVSP package for your platform, extract it adjacent to this repository, and run the upstream helper (see below).
-3. **Run the test suite** – full coverage requires the real OpenVSP bindings. When the runtime is missing the test suite falls back to a stub unless you set `STREAMLINE_REQUIRE_REAL_VSP=1`.
+## Environment
 
-The sections below expand each step with additional context and troubleshooting tips.
-
-## Prerequisites
-
-* Python 3.11 (any distribution – CPython, Conda, or pyenv – is fine)
-* `pip` ≥ 22
-* Git (for development)
-
-> 💡 Conda users can continue to use `environment.yml` as before; the commands below work equally well inside an activated Conda environment.
-
-## 1. Install Python dependencies
+One environment, pinned: `flake.nix` ships OpenVSP **3.51.2** (the official Ubuntu 24.04 build,
+wrapped in `nix/openvsp.nix`), Python 3.12, numpy, matplotlib, pytest. Nothing is installed by
+hand; there is no conda path and no Windows path.
 
 ```bash
-pip install --upgrade pip
-pip install -r requirements.txt
+nix develop
 ```
 
-## 2. Install the OpenVSP runtime
+That shell has `python` with `import openvsp` working, `vsp`/`vspaero`/`vspscript` on `PATH`, and
+`make`. `streamline version` prints the pin status; canonical runs refuse an unpinned OpenVSP.
 
-1. Download the platform archive from the [OpenVSP downloads page](https://openvsp.org/download.php).
-2. Extract it next to this repository so you have a folder such as `OpenVSP-3.46.0-win64/`.
-3. Run the helper inside the package to install the Python bindings. On Windows that is:
+The GUI is a design-time convenience: `streamline gui projects/icarus/geometry/icarus-A.vsp3`
+(under WSL, WSLg provides the display; try `LIBGL_ALWAYS_SOFTWARE=1` if GL misbehaves).
 
-   ```powershell
-   cd OpenVSP-3.46.0-win64/python
-   ./setup.ps1
-   ```
+## Layout
 
-   On Linux/macOS use the provided shell script:
+| path | what |
+|---|---|
+| `src/streamline/` | the package — `vsp/` (session + geometry substrate), `analyses/`, `backends/`, `campaign/`, `export/`, `report/`, `cli.py` |
+| `contract/aerodb_contract/` | **the AeroDB contract** — dependency-free (stdlib + numpy): schema-as-code, `conventions.md`, validator, loader, physics lint, sign fixtures, completeness checklist, generated `spec.md`. `icarus-dynamics` pins this. |
+| `projects/icarus/` | the aircraft: `geometry/` (`.vsp3`, versioned by revision letter), `campaign/`, `massprops/`, `engine/`, `golden/reference/` |
+| `nix/openvsp.nix` | the OpenVSP pin |
+| `legacy/` | the pre-2026-08 workbench, frozen (see `legacy/README.md`) |
+| `tests/` | the suite; real-VSP tests are the CI default and never skip for green-ness |
 
-   ```bash
-   cd OpenVSP-3.46.0-linux/python
-   ./setup.sh
-   ```
+## Make targets
 
-4. Activate your Streamline environment and verify the bindings:
+`make check` (contract + unit + real-VSP smoke) · `make test` (everything incl. slow solves) ·
+`make golden` · `make determinism` · `make campaign` · `make report` · `make spec` — the last five
+arrive with their phases and fail loudly until then.
 
-   ```powershell
-   conda activate streamline
-   python -c "import openvsp; print(openvsp.GetVSPVersion())"
-   ```
+## Rules that are contracts here
 
-If you keep the extracted directory beside the repository (the same parent folder) and run the upstream setup script inside your active environment, `import openvsp` should work without additional path tweaks.
-
-## 3. Running tests
-
-By default the test suite falls back to an in-memory stub if the OpenVSP runtime is unavailable. To require the real bindings (matching CI), opt-in explicitly:
-
-```bash
-export STREAMLINE_ALLOW_VSP_STUB=0  # or set in PowerShell/Command Prompt
-pytest
-```
-
-When the variable is **not** set, tests skip OpenVSP-dependent cases if the runtime is missing.
-
-## PowerShell convenience script
-
-Windows developers can run:
-
-```powershell
-./setup_streamline.ps1
-```
-
-The script creates or updates the Conda environment, installs the Python requirements, downloads the Windows OpenVSP package, extracts it beside the repository, and runs `pip install -r requirements-dev.txt` inside the package’s `python/` directory.
+* Body **FRD**, SI, radians, trailing-edge-down positive — `contract/aerodb_contract/conventions.md`
+  is locked with the schema, and the sign fixtures in it are asserted at export and at ingest.
+* No implicit solver defaults: a run refuses unless the campaign names a value for every analysis
+  input OpenVSP exposes, and the resolved set is written into the artifact.
+* No wallclock, hostname or path inside a hashed artifact; timestamps live in `BUILD.json`.
+* No laptop-produced AeroDB is ever released — `release publish` checks it is running in CI.

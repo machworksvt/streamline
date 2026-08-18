@@ -1,0 +1,17 @@
+name: streamline
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  - numpy
+  - scipy
+  - pandas
+  - pydantic>=2
+  - matplotlib
+  - rich
+  - textual>=0.66
+  - reportlab        # PDF (you can swap later)
+  - pillow
+  - pip:
+      - typing-extensions

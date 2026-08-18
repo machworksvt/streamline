@@ -1,0 +1,63 @@
+{
+  "_": "Engine deck spec: everything the bench cannot measure, declared here with its source. `streamline engine fit projects/icarus/engine/spec.json` runs the fits over bench_bags and writes engine_deck.json. NO BENCH THRUST EXISTS (no load cell) — thrust is a power-law prior anchored at the datasheet; fuel flow and spool dynamics are fitted from the Nov/Oct 2025 bags. See PROVENANCE.md.",
+  "engine": "Hybl H20PRO",
+  "bench_bags": [
+    "rosbag2_2025_11_16-15_25_29",
+    "rosbag2_2025_10_26-13_08_39",
+    "rosbag2_2025_11_16-14_49_59",
+    "rosbag2_2025_03_01-15_33_38"
+  ],
+  "datasheet": {
+    "_": "H20PRO Engine USER MANUAL rev 10 EN, section 2.4 Operational limits (15 degC, 1013 hPa)",
+    "rpm_idle": 37000,
+    "rpm_max_continuous": 118000,
+    "rpm_max_transient": 123000,
+    "thrust_N_at_max_transient": 200.0,
+    "fuel_g_min_at_max_thrust": 540.0,
+    "egt_C_at_max": 680,
+    "dry_mass_kg": 1.65,
+    "source": "datasheet"
+  },
+  "thrust_model": {
+    "kind": "power_law",
+    "exponent": 2.0,
+    "_": "T = 200 N * (N/123000)^2. Exponent 2 is the classical rotor-speed scaling; small turbojets measure 2-3 in the upper band. Replace with kind='measured' the day a load cell run exists."
+  },
+  "fuel": {
+    "capacity_kg": 3.128,
+    "density_kg_m3": 800.0,
+    "type": "Jet A-1 / kerosene + 5% turbine oil (manual sec 2.3)",
+    "_": "capacity_kg = the Fusion 'Weight Estimates CAD' tankage (main 3.32 L + hopper 0.59 L = 3.91 L, user-confirmed 2026-08-18) x 0.80 kg/L kerosene-oil mix. Usable-fuel margin (unusable volume, expansion) not yet applied."
+  },
+  "fuel_fit_degree": 2,
+  "setting_axis_rpm": [
+    37000,
+    45000,
+    55000,
+    65000,
+    75000,
+    85000,
+    95000,
+    105000,
+    112000,
+    118000,
+    123000
+  ],
+  "thrust_line": {
+    "point_m": [
+      -0.394,
+      0.0,
+      -0.044
+    ],
+    "direction_b": [
+      1.0,
+      0.0,
+      0.0
+    ],
+    "_": "H20PRO stack geom bbox centre in icarus-B, FRD from the datum; axis along +x (thrust forward)"
+  },
+  "ambient_pressure_Pa": 94500.0,
+  "ambient_temperature_K": 291.0,
+  "test_date": "2025-11-16",
+  "notes": "Static bench runs of the Icarus H20PRO logged over CAN by machpilot (rosbag2 -> CSV). Primary run 2025-11-16 15:25 (full 0-100% throttle staircase to 117.8 kRPM, up and down); 2025-10-26 (6-plateau staircase to 80 kRPM); 2025-11-16 14:49 (single ramp, transient only); 2025-03-01 15:33 (one ~60 s light, idle-region anchor). ECU fuel_flow is VOLUMETRIC mL/min computed from pump revolutions and uncalibrated (manual sec 8.6) — the bench reads ~770 mL/min at 117 kRPM vs the datasheet's ~675 mL/min-equivalent at 200 N; both retained, the datasheet point pulls the fit. Ambient: bench box pressure ~945 hPa, 17-20 degC (Blacksburg VA, ~640 m)."
+}

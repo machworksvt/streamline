@@ -1,0 +1,30 @@
+{
+  "_": "rev A -> rev B: contract-conform control groups, honest sets, hygiene. See AUDIT-A.md for the defects this fixes. Geoms, meshes and mass data untouched.",
+  "source": "icarus-A.vsp3",
+  "source_sha256": "03502561a2a546363e444bfdfb3378469a13e41e3673f9edc7c18acc22499f99",
+  "out": "icarus-B.vsp3",
+  "rename_geoms": [
+    {"name": "Fusealge", "new": "Fuselage"},
+    {"name": "Servo", "parent": "VTail", "new": "Servo_VTail"},
+    {"name": "Servo", "parent": "Elevator", "new": "Servo_Elevator"}
+  ],
+  "rename_subsurfaces": [
+    {"geom": "Elevator", "old": "SS_CONT_0", "new": "Stabilator"}
+  ],
+  "zero_deflections": true,
+  "groups": [
+    {"name": "aileron_right", "geom": "MainWing", "subsurface": "Ailerons", "gains": [1.0, 0.0]},
+    {"name": "aileron_left", "geom": "MainWing", "subsurface": "Ailerons", "gains": [0.0, -1.0]},
+    {"name": "flap_right", "geom": "MainWing", "subsurface": "Flaps", "gains": [1.0, 0.0]},
+    {"name": "flap_left", "geom": "MainWing", "subsurface": "Flaps", "gains": [0.0, -1.0]},
+    {"name": "flap_detent", "geom": "MainWing", "subsurface": "Flaps", "gains": [1.0, -1.0]},
+    {"name": "stabilator", "geom": "Elevator", "subsurface": "Stabilator", "gains": [1.0, -1.0]},
+    {"name": "ruddervator_right", "geom": "VTail", "subsurface": "Ruddervators", "gains": [1.0, 0.0]},
+    {"name": "ruddervator_left", "geom": "VTail", "subsurface": "Ruddervators", "gains": [0.0, -1.0]}
+  ],
+  "sets": [
+    {"name": "streamline_vlm", "geoms": ["MainWing", "VTail", "Elevator"]},
+    {"name": "streamline_parasite",
+     "geoms": ["MainWing", "VTail", "Elevator", "Fuselage", "H20PRO", "Intake"]}
+  ]
+}

@@ -1,0 +1,6 @@
+# Geometry revisions ride Git LFS: icarus-B.vsp3 is 52 MB (six embedded servo/gear CAD meshes),
+# and every revision is kept forever (§8.2 — a revision letter per aero-invalidating change).
+# One-time setup per clone: `git lfs install`; CI checkouts need `lfs: true`.
+projects/*/geometry/*.vsp3 filter=lfs diff=lfs merge=lfs -text
+# Engine bench rosbags: the raw .db3 (sqlite) ride LFS; the CSV conversions stay plain (diffable).
+projects/*/engine/bench/**/*.db3 filter=lfs diff=lfs merge=lfs -text

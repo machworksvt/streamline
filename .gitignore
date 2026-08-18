@@ -1,7 +1,32 @@
-projects/*
-*/__pycache__
+# Geometry and campaign definitions under projects/ ARE versioned (Master Plan §8.2). What is not:
+# solver scratch, results, and anything a run writes next to a model.
+projects/*/results/
+projects/*/**/*.vspaero
+projects/*/**/*.vspgeom
+projects/*/**/*.history
+projects/*/**/*.stab
+projects/*/**/*.polar
+projects/*/**/*.lod
+projects/*/**/*.adb
+projects/*/**/*.adb.cases
+projects/*/**/*.csf
+projects/*/**/*.vkey
+projects/*/**/*.taglist
+projects/*/**/*.tag
+projects/*/**/*.flt
+projects/*/**/*.group.*
+projects/*/**/*.quad.*
+projects/*/**/*.slc
+projects/*/**/*.cuts
+projects/*/**/*.fem
+projects/*/**/*.vsptime
+
+build/
+result
+result-*
+__pycache__/
 *.pyc
+.pytest_cache/
+*.egg-info/
+.ipynb_checkpoints/
 .DS_Store
-*.vsptime
-OpenVSP-*/**
-OpenVSP-*

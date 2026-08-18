@@ -1,0 +1,58 @@
+# streamline CI — the PR tier.
+#
+# Everything runs inside the pinned Nix dev shell (flake.nix → nix/openvsp.nix), so CI and a laptop
+# execute the same OpenVSP 3.51.2 and the same Python. There is no OpenVSP download step here on
+# purpose: the flake IS the download, hashed. Master Plan §8.9 #3/#4, decisions D2/D3.
+#
+# What runs today (P1): the contract tests (P2 onward), the unit tests, and the real-VSP smoke —
+# a headless VSPAERO solve on a flat wing checked against lifting-line theory. The golden reference
+# campaign, the determinism double-run and the report smoke are added by their phases as their own
+# steps; nothing is stubbed green ahead of existing.
+#
+# Every step is its own `run:` so a failure names its step, and nothing here writes anywhere.
+# Releases are release.yml's job and that file does not exist until P7.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: contract · unit · real-VSP smoke
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      # OpenVSP is fetched from openvsp.org by hash inside the flake; no token, no apt.
+      - name: Install Nix
+        uses: cachix/install-nix-action@v30
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      # Builds the wrapped OpenVSP and the Python env. A bad pin fails HERE, with the fetch error,
+      # rather than as an import error three steps later.
+      - name: Warm the dev shell
+        run: nix develop -c true
+
+      # The pin, printed into the log and enforced: exit 1 if the running OpenVSP is not the one
+      # nix/openvsp.nix declares. Nothing downstream is meaningful if this is not green.
+      - name: OpenVSP pin
+        run: nix develop -c make version
+
+      - name: Contract + unit tests
+        run: nix develop -c make check
+
+      # The real solve. Slow-marked because it runs VSPAERO; a few seconds on the runner.
+      - name: Real-VSP smoke (flat wing vs lifting-line)
+        run: nix develop -c python -m pytest -q -m slow

@@ -1,0 +1,478 @@
+timestamp,can_msg.data,can_msg.dlc,can_msg.id,error_mask,error_messages,header.frame_id,header.stamp.nanosec,header.stamp.sec,reset_required
+1761498520293187161,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,292335577,1761498520,False
+1761498521300971238,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,300438514,1761498521,False
+1761498522305371857,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,304986499,1761498522,False
+1761498523308103647,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,307576812,1761498523,False
+1761498524312310278,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,311836853,1761498524,False
+1761498525317023045,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,316668216,1761498525,False
+1761498526314573899,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,314306146,1761498526,False
+1761498527318534722,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,317942573,1761498527,False
+1761498528322303807,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,321991284,1761498528,False
+1761498529327946828,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,327401497,1761498529,False
+1761498530334210526,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,333861522,1761498530,False
+1761498531330831802,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,330401323,1761498531,False
+1761498532337103927,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,336514467,1761498532,False
+1761498533344254952,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,343421260,1761498533,False
+1761498534347345771,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,346771256,1761498534,False
+1761498535344103355,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,343564489,1761498535,False
+1761498536349288737,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,348752848,1761498536,False
+1761498537354726097,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,353712976,1761498537,False
+1761498538357344617,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,356908187,1761498538,False
+1761498539360384502,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,360070732,1761498539,False
+1761498540363721364,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,363205124,1761498540,False
+1761498541369211969,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,368867606,1761498541,False
+1761498542366461753,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,365752035,1761498542,False
+1761498543373249962,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,372753563,1761498543,False
+1761498544377066991,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,376883754,1761498544,False
+1761498545382680030,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,381924743,1761498545,False
+1761498546378428441,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,377912202,1761498546,False
+1761498547383951859,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,383451204,1761498547,False
+1761498548389792718,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,388973110,1761498548,False
+1761498549396558078,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,396006894,1761498549,False
+1761498550394841429,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,394369960,1761498550,False
+1761498551401144917,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,400866189,1761498551,False
+1761498552407560599,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,405879784,1761498552,False
+1761498553408669543,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,408435904,1761498553,False
+1761498554404529131,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,403855288,1761498554,False
+1761498555417757307,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,417373264,1761498555,False
+1761498556412176331,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,411887779,1761498556,False
+1761498557418016963,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,417636344,1761498557,False
+1761498558421130684,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,420581934,1761498558,False
+1761498559428287730,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,427685826,1761498559,False
+1761498560433039255,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,432365989,1761498560,False
+1761498561429567127,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,429122859,1761498561,False
+1761498562435748586,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,435180091,1761498562,False
+1761498563439065993,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,438437817,1761498563,False
+1761498564442661256,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,442306335,1761498564,False
+1761498565447555426,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,446943698,1761498565,False
+1761498566445654317,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,445417511,1761498566,False
+1761498567448136613,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,447756923,1761498567,False
+1761498568451555381,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,450753409,1761498568,False
+1761498569456965302,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,455860411,1761498569,False
+1761498570462051539,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,461485637,1761498570,False
+1761498571466035385,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,465489132,1761498571,False
+1761498572469898883,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,467985430,1761498572,False
+1761498573471422206,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,470804111,1761498573,False
+1761498574482928013,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,482392961,1761498574,False
+1761498575479440906,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,478747482,1761498575,False
+1761498576479653035,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,478432495,1761498576,False
+1761498577483137768,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,482687166,1761498577,False
+1761498578487630700,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,487042655,1761498578,False
+1761498579490581632,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,490166326,1761498579,False
+1761498580492208458,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,491673534,1761498580,False
+1761498581497298551,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,496813804,1761498581,False
+1761498582500980699,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,500602259,1761498582,False
+1761498583507391251,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,506573442,1761498583,False
+1761498584511686391,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,511207949,1761498584,False
+1761498585518606382,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,516919787,1761498585,False
+1761498586520712701,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,520302740,1761498586,False
+1761498587523406646,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,522974350,1761498587,False
+1761498588524783638,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,524481200,1761498588,False
+1761498589527345233,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,526990537,1761498589,False
+1761498590529974768,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,529348515,1761498590,False
+1761498591535700115,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,535428589,1761498591,False
+1761498592537342186,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,537081765,1761498592,False
+1761498593541318648,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,539939965,1761498593,False
+1761498594547315894,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,546736874,1761498594,False
+1761498595550705899,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,550316644,1761498595,False
+1761498596545021536,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,544398804,1761498596,False
+1761498597557541341,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,556923282,1761498597,False
+1761498598553589554,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,553311789,1761498598,False
+1761498599556258964,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,555870061,1761498599,False
+1761498600562913139,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,561338582,1761498600,False
+1761498601566698159,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,566218502,1761498601,False
+1761498602571664053,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,571306990,1761498602,False
+1761498603568200633,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,567877651,1761498603,False
+1761498604573281422,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,572833158,1761498604,False
+1761498605575541833,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,574887390,1761498605,False
+1761498606577898688,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,577599355,1761498606,False
+1761498607582601819,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,582128275,1761498607,False
+1761498608593000243,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,592425481,1761498608,False
+1761498609597736455,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,597300576,1761498609,False
+1761498610599960047,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,599602441,1761498610,False
+1761498611602636575,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,602254681,1761498611,False
+1761498612604492868,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,604152926,1761498612,False
+1761498613606588815,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,606286410,1761498613,False
+1761498614610865922,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,610340313,1761498614,False
+1761498615616760435,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,616495247,1761498615,False
+1761498616611043539,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,610690829,1761498616,False
+1761498617614453419,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,614064677,1761498617,False
+1761498618618451798,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,618097808,1761498618,False
+1761498619626184291,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,625758141,1761498619,False
+1761498620632993645,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,632675304,1761498620,False
+1761498621633580868,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,632843705,1761498621,False
+1761498622640887501,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,640144386,1761498622,False
+1761498623636612217,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,635310053,1761498623,False
+1761498624642270568,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,641767168,1761498624,False
+1761498625649193401,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,648810612,1761498625,False
+1761498626646183981,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,645837896,1761498626,False
+1761498627660382954,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,659864643,1761498627,False
+1761498628658603384,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,657978543,1761498628,False
+1761498629655064964,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,654597885,1761498629,False
+1761498630661309967,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,660621957,1761498630,False
+1761498631668212889,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,667887733,1761498631,False
+1761498632665296631,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,664868721,1761498632,False
+1761498633671684332,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,671310983,1761498633,False
+1761498634681335750,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,680889409,1761498634,False
+1761498635674023996,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,673645047,1761498635,False
+1761498636686342607,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,685961291,1761498636,False
+1761498637688391259,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,687557488,1761498637,False
+1761498638689587802,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,689013843,1761498638,False
+1761498639690772537,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,690307572,1761498639,False
+1761498640691866137,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,691611254,1761498640,False
+1761498641704485930,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,703870882,1761498641,False
+1761498642700115179,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,699758215,1761498642,False
+1761498643708040135,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,706893785,1761498643,False
+1761498644712419356,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,711994998,1761498644,False
+1761498645714694717,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,714058741,1761498645,False
+1761498646718904924,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,718606456,1761498646,False
+1761498647716351860,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,715926255,1761498647,False
+1761498648720644356,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,720145438,1761498648,False
+1761498649724472632,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,724084212,1761498649,False
+1761498650726094430,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,725545784,1761498650,False
+1761498651733675698,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,733306574,1761498651,False
+1761498652736216154,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,735949207,1761498652,False
+1761498653738750895,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,738375947,1761498653,False
+1761498654742881732,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,742505472,1761498654,False
+1761498655747064231,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,746465377,1761498655,False
+1761498656750991448,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,750432114,1761498656,False
+1761498657752161373,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,751597719,1761498657,False
+1761498658754327741,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,753750231,1761498658,False
+1761498659758331108,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,757623421,1761498659,False
+1761498660763831149,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,761582038,1761498660,False
+1761498661765173983,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,764728763,1761498661,False
+1761498662770148204,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,769223811,1761498662,False
+1761498663774990572,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,774263269,1761498663,False
+1761498664778901626,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,778409429,1761498664,False
+1761498665783155682,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,782703422,1761498665,False
+1761498666781404010,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,781010822,1761498666,False
+1761498667784351384,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,784016309,1761498667,False
+1761498668788328521,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,788025766,1761498668,False
+1761498669791758224,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,790749543,1761498669,False
+1761498670793937639,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,793494563,1761498670,False
+1761498671797385639,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,797058692,1761498671,False
+1761498672805792655,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,805037577,1761498672,False
+1761498673801442052,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,800978080,1761498673,False
+1761498674807336402,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,806922639,1761498674,False
+1761498675812751868,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,812464473,1761498675,False
+1761498676815204619,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,814636422,1761498676,False
+1761498677820685814,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,819450699,1761498677,False
+1761498678824007247,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,823163528,1761498678,False
+1761498679825613757,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,825387579,1761498679,False
+1761498680829467553,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,829020221,1761498680,False
+1761498681832119486,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,831587514,1761498681,False
+1761498682835054403,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,834599135,1761498682,False
+1761498683838480081,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,837978093,1761498683,False
+1761498684841511746,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,841056574,1761498684,False
+1761498685846268775,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,845905796,1761498685,False
+1761498686851651864,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,851040723,1761498686,False
+1761498687855595653,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,854939777,1761498687,False
+1761498688857782543,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,856879208,1761498688,False
+1761498689864470659,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,863877535,1761498689,False
+1761498690858310243,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,857501949,1761498690,False
+1761498691863653731,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,863115359,1761498691,False
+1761498692869060686,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,868391753,1761498692,False
+1761498693875042345,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,874547174,1761498693,False
+1761498694873997408,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,873754046,1761498694,False
+1761498695883529741,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,882362085,1761498695,False
+1761498696877869729,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,877528574,1761498696,False
+1761498697883078733,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,882703499,1761498697,False
+1761498698891065595,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,889361168,1761498698,False
+1761498699904104026,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,891028548,1761498699,False
+1761498700900844734,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,900594237,1761498700,False
+1761498701899088126,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,898606651,1761498701,False
+1761498702907218127,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,906867533,1761498702,False
+1761498703902503010,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,902103008,1761498703,False
+1761498704909087983,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,907791751,1761498704,False
+1761498705914470888,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,914063013,1761498705,False
+1761498706919967861,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,919577939,1761498706,False
+1761498707914630071,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,914213909,1761498707,False
+1761498708919038569,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,917597920,1761498708,False
+1761498709930202296,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,929847094,1761498709,False
+1761498710923652471,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,923246100,1761498710,False
+1761498711937570946,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,936442043,1761498711,False
+1761498712939174623,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,938822557,1761498712,False
+1761498713941323223,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,941030133,1761498713,False
+1761498714945936630,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,945424915,1761498714,False
+1761498715942448291,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,940812410,1761498715,False
+1761498716944867882,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,944317095,1761498716,False
+1761498717947083755,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,946545736,1761498717,False
+1761498718958709175,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,958315157,1761498718,False
+1761498719960097931,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,959715913,1761498719,False
+1761498720961584347,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,961203353,1761498720,False
+1761498721963725515,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,962990279,1761498721,False
+1761498722966557180,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,965901817,1761498722,False
+1761498723972011959,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,971733910,1761498723,False
+1761498724981139203,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,980679424,1761498724,False
+1761498725981953125,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,980059196,1761498725,False
+1761498726988248672,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,987847710,1761498726,False
+1761498727987545083,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,986764887,1761498727,False
+1761498728990511591,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,990073221,1761498728,False
+1761498729992072270,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,991349994,1761498729,False
+1761498730991890318,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,991423468,1761498730,False
+1761498731999131633,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,998636463,1761498731,False
+1761498733004376718,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,3966380,1761498733,False
+1761498734009131786,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,8858633,1761498734,False
+1761498735005688009,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,5317575,1761498735,False
+1761498736013760378,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,13345560,1761498736,False
+1761498737020376585,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,19963911,1761498737,False
+1761498738014169514,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,13457736,1761498738,False
+1761498739018725980,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,18291770,1761498739,False
+1761498740022202990,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,21855053,1761498740,False
+1761498741025458246,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,24959812,1761498741,False
+1761498742030822572,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,30443242,1761498742,False
+1761498743035155125,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,34351634,1761498743,False
+1761498744042594928,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,42148623,1761498744,False
+1761498745037354310,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,37052805,1761498745,False
+1761498746043977711,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,43615758,1761498746,False
+1761498747046281937,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,45595407,1761498747,False
+1761498748051026821,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,50621892,1761498748,False
+1761498749054042781,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,53650428,1761498749,False
+1761498750056887230,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,56554653,1761498750,False
+1761498751059654377,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,59048615,1761498751,False
+1761498752063329059,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,62932129,1761498752,False
+1761498753067516265,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,66907111,1761498753,False
+1761498754073143743,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,68848370,1761498754,False
+1761498755073181168,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,72948399,1761498755,False
+1761498756075081172,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,74310545,1761498756,False
+1761498757077399781,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,77005380,1761498757,False
+1761498758082776653,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,82393164,1761498758,False
+1761498759085107066,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,84730745,1761498759,False
+1761498760088945082,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,88712345,1761498760,False
+1761498761092844456,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,91793253,1761498761,False
+1761498762095094817,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,94701567,1761498762,False
+1761498763099012429,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,98638444,1761498763,False
+1761498764102034246,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,101716486,1761498764,False
+1761498765105459825,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,105174960,1761498765,False
+1761498766108712012,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,108318731,1761498766,False
+1761498767110880341,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,110352371,1761498767,False
+1761498768123451623,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,118764284,1761498768,False
+1761498769124916209,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,124518448,1761498769,False
+1761498770120297823,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,119969631,1761498770,False
+1761498771124049875,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,123833618,1761498771,False
+1761498772128944636,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,128380826,1761498772,False
+1761498773132997813,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,132632532,1761498773,False
+1761498774139199335,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,138846854,1761498774,False
+1761498775143377384,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,143052711,1761498775,False
+1761498776147300572,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,146883099,1761498776,False
+1761498777150576739,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,150265826,1761498777,False
+1761498778151674747,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,151254234,1761498778,False
+1761498779153648426,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,153302953,1761498779,False
+1761498780155785870,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,155393358,1761498780,False
+1761498781157425480,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,156472038,1761498781,False
+1761498782161246427,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,160997403,1761498782,False
+1761498783166548616,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,165881766,1761498783,False
+1761498784165582592,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,165217760,1761498784,False
+1761498785169535064,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,168938199,1761498785,False
+1761498786172834214,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,172428677,1761498786,False
+1761498787177066093,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,176742541,1761498787,False
+1761498788187098357,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,185929619,1761498788,False
+1761498789191237964,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,190832588,1761498789,False
+1761498790194685691,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,194077818,1761498790,False
+1761498791190921464,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,190551544,1761498791,False
+1761498792198875520,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,198473759,1761498792,False
+1761498793200834104,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,200474200,1761498793,False
+1761498794205400462,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,204945485,1761498794,False
+1761498795210912063,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,210335614,1761498795,False
+1761498796212202405,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,211148484,1761498796,False
+1761498797218340171,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,216594185,1761498797,False
+1761498798220813673,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,220568520,1761498798,False
+1761498799216190842,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,215218969,1761498799,False
+1761498800219852368,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,219418127,1761498800,False
+1761498801225077539,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,224582755,1761498801,False
+1761498802229451602,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,229232401,1761498802,False
+1761498803236143231,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,235814558,1761498803,False
+1761498804234739457,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,234315744,1761498804,False
+1761498805241132807,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,240653159,1761498805,False
+1761498806238742915,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,237989987,1761498806,False
+1761498807242860643,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,242472738,1761498807,False
+1761498808245574110,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,245165470,1761498808,False
+1761498809258508992,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,257489279,1761498809,False
+1761498810252082450,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,251660785,1761498810,False
+1761498811264134799,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,263914639,1761498811,False
+1761498812267645541,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,267207653,1761498812,False
+1761498813269811578,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,269110009,1761498813,False
+1761498814272682638,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,270261005,1761498814,False
+1761498815275634626,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,275146466,1761498815,False
+1761498816281139992,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,280562327,1761498816,False
+1761498817284622796,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,284243436,1761498817,False
+1761498818277605020,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,277257820,1761498818,False
+1761498819282283346,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,281719570,1761498819,False
+1761498820294669932,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,293921580,1761498820,False
+1761498821298403972,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,297730564,1761498821,False
+1761498822301055196,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,300785052,1761498822,False
+1761498823303439991,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,303192759,1761498823,False
+1761498824301304594,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,300717521,1761498824,False
+1761498825306754513,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,306335153,1761498825,False
+1761498826312554994,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,312292274,1761498826,False
+1761498827312253941,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,311948629,1761498827,False
+1761498828318415867,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,317995419,1761498828,False
+1761498829323649957,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,320347780,1761498829,False
+1761498830324337137,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,323952273,1761498830,False
+1761498831330111681,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,329655361,1761498831,False
+1761498832325496468,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,325115316,1761498832,False
+1761498833328614956,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,328346860,1761498833,False
+1761498834332942152,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,332705992,1761498834,False
+1761498835335830216,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,334707080,1761498835,False
+1761498836339039981,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,338518957,1761498836,False
+1761498837342349655,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,341994551,1761498837,False
+1761498838348408101,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,348063909,1761498838,False
+1761498839353367672,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,353064984,1761498839,False
+1761498840359061617,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,358566801,1761498840,False
+1761498841362889104,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,362518864,1761498841,False
+1761498842359020406,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,358678678,1761498842,False
+1761498843363630880,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,363131905,1761498843,False
+1761498844365809138,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,365276658,1761498844,False
+1761498845370661641,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,369434409,1761498845,False
+1761498846371387944,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,371002760,1761498846,False
+1761498847376599756,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,376195436,1761498847,False
+1761498848381132792,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,380841272,1761498848,False
+1761498849388152873,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,387671722,1761498849,False
+1761498850384447079,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,384109223,1761498850,False
+1761498851388828073,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,388491401,1761498851,False
+1761498852394152434,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,392915731,1761498852,False
+1761498853396580197,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,396143589,1761498853,False
+1761498854401293598,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,401059358,1761498854,False
+1761498855406287872,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,405657184,1761498855,False
+1761498856410693579,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,410168811,1761498856,False
+1761498857414239135,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,413817375,1761498857,False
+1761498858417051260,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,416597180,1761498858,False
+1761498859421972385,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,421619457,1761498859,False
+1761498860426599759,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,425486640,1761498860,False
+1761498861428980009,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,428590665,1761498861,False
+1761498862432109899,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,431881195,1761498862,False
+1761498863435864215,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,435155320,1761498863,False
+1761498864430542612,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,429965204,1761498864,False
+1761498865435744243,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,434891284,1761498865,False
+1761498866437836639,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,436654784,1761498866,False
+1761498867449280014,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,448922190,1761498867,False
+1761498868452545966,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,452290862,1761498868,False
+1761498869455043353,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,454717466,1761498869,False
+1761498870458533871,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,458191151,1761498870,False
+1761498871462801679,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,462453680,1761498871,False
+1761498872457352452,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,456655268,1761498872,False
+1761498873463694393,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,460892284,1761498873,False
+1761498874477391795,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,476919283,1761498874,False
+1761498875474328296,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,473944809,1761498875,False
+1761498876476956740,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,476676645,1761498876,False
+1761498877482045130,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,480218316,1761498877,False
+1761498878485769373,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,485366622,1761498878,False
+1761498879481808613,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,481450630,1761498879,False
+1761498880489076526,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,488634191,1761498880,False
+1761498881492921543,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,492582472,1761498881,False
+1761498882497006733,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,496571885,1761498882,False
+1761498883500410976,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,500078305,1761498883,False
+1761498884503107202,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,502725282,1761498884,False
+1761498885506049953,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,505764615,1761498885,False
+1761498886508975097,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,508758629,1761498886,False
+1761498887517347297,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,517062922,1761498887,False
+1761498888512814531,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,512571490,1761498888,False
+1761498889520714840,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,520423967,1761498889,False
+1761498890526815290,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,526383929,1761498890,False
+1761498891530652173,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,530322914,1761498891,False
+1761498892533440485,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,532991870,1761498892,False
+1761498893538906302,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,538470175,1761498893,False
+1761498894541756149,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,540563735,1761498894,False
+1761498895544631607,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,544267648,1761498895,False
+1761498896548408214,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,548090295,1761498896,False
+1761498897554300353,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,553981507,1761498897,False
+1761498898549091787,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,548783218,1761498898,False
+1761498899553869708,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,553475531,1761498899,False
+1761498900558997778,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,558531311,1761498900,False
+1761498901562335753,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,562003848,1761498901,False
+1761498902564955039,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,564599445,1761498902,False
+1761498903570945559,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,570471444,1761498903,False
+1761498904573085289,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,572865057,1761498904,False
+1761498905584533640,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,584149460,1761498905,False
+1761498906587297190,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,586904687,1761498906,False
+1761498907591267750,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,590936332,1761498907,False
+1761498908593468838,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,592498759,1761498908,False
+1761498909599144595,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,598446611,1761498909,False
+1761498910601405510,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,601033565,1761498910,False
+1761498911604426295,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,604093024,1761498911,False
+1761498912608401358,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,608020867,1761498912,False
+1761498913609590584,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,609173630,1761498913,False
+1761498914611914253,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,611691659,1761498914,False
+1761498915614983101,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,614644648,1761498915,False
+1761498916618606796,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,618246607,1761498916,False
+1761498917622130014,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,621454265,1761498917,False
+1761498918631311290,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,630915056,1761498918,False
+1761498919633273156,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,632554289,1761498919,False
+1761498920637933253,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,637193387,1761498920,False
+1761498921638858372,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,638595445,1761498921,False
+1761498922641170841,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,640773394,1761498922,False
+1761498923645394793,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,644373696,1761498923,False
+1761498924657270763,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,656647978,1761498924,False
+1761498925652066078,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,651064515,1761498925,False
+1761498926657983114,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,657626745,1761498926,False
+1761498927661227135,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,660875569,1761498927,False
+1761498928665420058,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,665144875,1761498928,False
+1761498929668671894,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,668253487,1761498929,False
+1761498930670445402,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,670125819,1761498930,False
+1761498931673947320,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,673548795,1761498931,False
+1761498932677310812,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,676919875,1761498932,False
+1761498933684510566,[0 0 0 0 0 0 0 0],8,263,0,[],Errors,684031339,1761498933,False
+1761498934693985980,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,693380978,1761498934,False
+1761498935689538348,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,689291149,1761498935,False
+1761498936692156208,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,691362177,1761498936,False
+1761498937705010048,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,704571098,1761498937,False
+1761498938708438301,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,708128393,1761498938,False
+1761498939706613017,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,706240910,1761498939,False
+1761498940710696416,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,710344318,1761498940,False
+1761498941715398139,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,715004201,1761498941,False
+1761498942719678234,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,718819487,1761498942,False
+1761498943724354302,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,724098913,1761498943,False
+1761498944729005247,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,728665412,1761498944,False
+1761498945733898106,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,733547452,1761498945,False
+1761498946738087685,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,737666254,1761498946,False
+1761498947733019349,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,732684222,1761498947,False
+1761498948736850626,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,736388607,1761498948,False
+1761498949741008681,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,740728039,1761498949,False
+1761498950747125073,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,746246015,1761498950,False
+1761498951752813286,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,751143750,1761498951,False
+1761498952755886096,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,755214826,1761498952,False
+1761498953765109502,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,764515091,1761498953,False
+1761498954758788932,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,758360947,1761498954,False
+1761498955762381138,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,761443766,1761498955,False
+1761498956765707340,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,765106915,1761498956,False
+1761498957778496877,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,778238775,1761498957,False
+1761498958782055904,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,781533812,1761498958,False
+1761498959784496509,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,784172499,1761498959,False
+1761498960788745366,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,788395044,1761498960,False
+1761498961794164897,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,792788676,1761498961,False
+1761498962798648995,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,796700721,1761498962,False
+1761498963791440197,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,790838725,1761498963,False
+1761498964796303575,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,795958409,1761498964,False
+1761498965802251606,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,801774367,1761498965,False
+1761498966805217521,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,804023515,1761498966,False
+1761498967810895062,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,810429221,1761498967,False
+1761498968814326953,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,813701031,1761498968,False
+1761498969819234917,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,818698336,1761498969,False
+1761498970822806767,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,822406900,1761498970,False
+1761498971826446048,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,826152711,1761498971,False
+1761498972830352043,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,830052497,1761498972,False
+1761498973833238365,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,832645643,1761498973,False
+1761498974836426195,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,836049379,1761498974,False
+1761498975841321819,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,840893084,1761498975,False
+1761498976839276268,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,838865299,1761498976,False
+1761498977842910306,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,842548440,1761498977,False
+1761498978850210883,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,849770307,1761498978,False
+1761498979851520457,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,851081642,1761498979,False
+1761498980858493486,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,857809322,1761498980,False
+1761498981863215125,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,862818852,1761498981,False
+1761498982866660659,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,866205234,1761498982,False
+1761498983871746793,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,871219317,1761498983,False
+1761498984877112634,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,876718476,1761498984,False
+1761498985880840325,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,880435636,1761498985,False
+1761498986875305862,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,874814174,1761498986,False
+1761498987879400763,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,878973701,1761498987,False
+1761498988883290373,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,882793630,1761498988,False
+1761498989887517448,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,887219351,1761498989,False
+1761498990894651361,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,894266425,1761498990,False
+1761498991903133359,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,901112114,1761498991,False
+1761498992898814180,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,898367853,1761498992,False
+1761498993902703391,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,902128903,1761498993,False
+1761498994909644473,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,909274168,1761498994,False
+1761498995915976629,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,915651360,1761498995,False
+1761498996909681330,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,909194804,1761498996,False
+1761498997916505107,[  0   0 128   0   0   0   0   0],8,263,140737488355328,['p0 sens out of range: Ambient pressure sensor out of range. Currently not used.'],Errors,916086663,1761498997,False
