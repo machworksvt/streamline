@@ -33,11 +33,13 @@ stdenv.mkDerivation rec {
   version = "3.51.2";
 
   src = fetchurl {
-    # openvsp.org moves a release from zips/current/ to zips/old/ when the next one ships. Both
-    # spellings are listed so the pin survives that move; the hash is what actually pins it.
+    # openvsp.org moves a release from zips/current/ to zips/old/ when the next one ships, but
+    # download.php doesn't 404 the stale zips/current/ path afterward — it 200s with an HTML
+    # "here's what's current now" landing page. fetchurl treats that as a successful download and
+    # never falls through, so zips/old/ (the permanent home once superseded) has to come first.
     urls = [
-      "https://openvsp.org/download.php?file=zips/current/linux/OpenVSP-${version}-Ubuntu-24.04_amd64.deb"
       "https://openvsp.org/download.php?file=zips/old/linux/OpenVSP-${version}-Ubuntu-24.04_amd64.deb"
+      "https://openvsp.org/download.php?file=zips/current/linux/OpenVSP-${version}-Ubuntu-24.04_amd64.deb"
     ];
     name = "OpenVSP-${version}-Ubuntu-24.04_amd64.deb";
     sha256 = "da7f40856e0c905bc6bb32bee83f7a1096c5a714c7f5398405c594e8639dace5";
