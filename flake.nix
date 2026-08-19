@@ -69,6 +69,10 @@
               export LIBGL_ALWAYS_SOFTWARE=1
               export __GLX_VENDOR_LIBRARY_NAME=mesa
               echo "streamline dev shell — OpenVSP ${openvsp.pinnedVersion} (nix), python ${python.version}"
+              # Interactive only ($- has 'i') — a build log running `nix develop -c ...`
+              # shouldn't get PS1 noise, and nesting (cd into another flake, `nix develop`
+              # again) should stack visibly rather than silently looking unchanged.
+              case $- in *i*) export PS1="(nix:streamline) $PS1" ;; esac
             '';
           };
         });
